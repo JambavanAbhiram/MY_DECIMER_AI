@@ -1,103 +1,146 @@
 """
-core/segmentation.py
+segmentation.py
 
-Chemical structure segmentation using DECIMER Segmentation.
+Chemical Structure Detection & Segmentation
 
 Responsibilities
 ----------------
-- Load rendered page images
-- Segment chemical structures
-- Save cropped structures
-- Return metadata for each detected structure
+1. Detect chemical structures using YOLO.
+2. Crop each detected structure.
+3. Save cropped images.
+4. Return crop information.
 
-Author: DECIMER Pipeline
+Author: Abhiram
 """
 
+from dataclasses import dataclass
 from pathlib import Path
-from typing import List
 
 import cv2
-from PIL import Image
+from ultralytics import YOLO
 
-from decimer_segmentation import segment_chemical_structures
+from config import (
+    CROP_FOLDER,
+    IMAGE_NAME_TEMPLATE,
+    YOLO_CONFIDENCE_THRESHOLD,
+)
 
 
-class ChemicalSegmenter:
-    """
-    Performs chemical structure segmentation on rendered pages.
-    """
+@dataclass
+class Detection:
 
-    def __init__(self, output_folder: Path):
+    image_id: int
 
-        self.output_folder = output_folder
+    image_path: Path
 
-    def segment_page(self, page_record: dict) -> List[dict]:
+    image_type: str
+
+    is_formula: bool
+
+    confidence: float
+
+    bbox: tuple
+
+
+class StructureSegmenter:
+
+    def __init__(
+        self,
+        model_path="models/yolo/best.pt"
+    ):
+
+        self.model = YOLO(model_path)
+
+    def segment(
+        self,
+        page_image: Path,
+        output_directory: Path
+    ):
         """
-        Segment all chemical structures from a rendered page.
+        Detect and crop chemical structures.
 
         Parameters
         ----------
-        page_record : dict
+        page_image : Path
+
+        output_directory : Path
 
         Returns
         -------
-        List[dict]
+        list[Detection]
         """
 
-        page_path = Path(page_record["filepath"])
+        image = cv2.imread(str(page_image))
 
-        pdf_name = page_record["pdf_name"]
+        if image is None:
+            raise FileNotFoundError(page_image)
 
-        page_number = page_record["page_number"]
+        crop_folder = output_directory / CROP_FOLDER
 
-        page_stem = Path(page_record["filename"]).stem
-
-        save_folder = self.output_folder / pdf_name
-
-        save_folder.mkdir(
+        crop_folder.mkdir(
             parents=True,
             exist_ok=True
         )
 
-        image = cv2.imread(str(page_path))
+        detections = []
 
-        if image is None:
-            return []
+        results = self.model.predict(
+            source=image,
+            conf=YOLO_CONFIDENCE_THRESHOLD,
+            verbose=False
+        )
 
-        structures = segment_chemical_structures(image)
+        image_counter = 1
 
-        records = []
+        for result in results:
 
-        for idx, structure in enumerate(structures):
+            boxes = result.boxes
 
-            filename = (
-                f"{page_stem}_structure_{idx + 1:03d}.png"
-            )
+            if boxes is None:
+                continue
 
-            save_path = save_folder / filename
+            for box in boxes:
 
-            Image.fromarray(structure).save(save_path)
+                x1, y1, x2, y2 = map(
+                    int,
+                    box.xyxy[0].tolist()
+                )
 
-            records.append({
+                confidence = float(box.conf[0])
 
-                "pdf_name": pdf_name,
+                crop = image[y1:y2, x1:x2]
 
-                "page_number": page_number,
+                filename = IMAGE_NAME_TEMPLATE.format(
+                    image_counter
+                )
 
-                "structure_id": idx + 1,
+                crop_path = crop_folder / filename
 
-                "image_path": str(save_path),
+                cv2.imwrite(
+                    str(crop_path),
+                    crop
+                )
 
-                "width": structure.shape[1],
+                detections.append(
 
-                "height": structure.shape[0],
+                    Detection(
 
-                "is_formula": None,
+                        image_id=image_counter,
 
-                "smiles": None,
+                        image_path=crop_path,
 
-                "processed": False
+                        image_type="chemical_structure",
 
-            })
+                        is_formula=True,
 
-        return records
+                        confidence=confidence,
+
+                        bbox=(x1, y1, x2, y2)
+
+                    )
+
+                )
+
+                image_counter += 1
+
+        return detections

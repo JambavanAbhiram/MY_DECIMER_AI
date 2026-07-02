@@ -1,139 +1,114 @@
 """
-core/config.py
+config.py
 
-Global configuration for the DECIMER Project.
-
-Author: DECIMER Project
+Global configuration for the DECIMER document processing pipeline.
 """
 
 from pathlib import Path
 
-# ==========================================================
-# PROJECT ROOT
-# ==========================================================
+# =============================================================================
+# PROJECT PATHS
+# =============================================================================
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent
 
-# ==========================================================
-# INPUT
-# ==========================================================
+OUTPUT_ROOT = PROJECT_ROOT / "outputs"
+TEMP_ROOT = PROJECT_ROOT / "temp"
+LOG_ROOT = PROJECT_ROOT / "logs"
 
-INPUT_FOLDER = PROJECT_ROOT / "input"
+# Create required folders automatically
+for directory in [OUTPUT_ROOT, TEMP_ROOT, LOG_ROOT]:
+    directory.mkdir(parents=True, exist_ok=True)
 
-# ==========================================================
-# OUTPUT
-# ==========================================================
 
-OUTPUT_FOLDER = PROJECT_ROOT / "output"
+# =============================================================================
+# INPUT SETTINGS
+# =============================================================================
 
-RENDERED_FOLDER = OUTPUT_FOLDER / "rendered_pages"
+SUPPORTED_INPUT_TYPES = [
+    "path",
+    "blob"
+]
 
-SEGMENTED_FOLDER = OUTPUT_FOLDER / "segmented_structures"
+SUPPORTED_FILE_EXTENSIONS = [
+    ".pdf"
+]
 
-CLEANED_FOLDER = OUTPUT_FOLDER / "cleaned_structures"
 
-REDRAW_FOLDER = OUTPUT_FOLDER / "redraw"
+# =============================================================================
+# DOCUMENT SETTINGS
+# =============================================================================
 
-REDRAW_PNG_FOLDER = REDRAW_FOLDER / "png"
+# SHA256 is recommended for deterministic document IDs
+DOCUMENT_ID_METHOD = "sha256"
 
-REDRAW_SVG_FOLDER = REDRAW_FOLDER / "svg"
+# If False, existing outputs may be overwritten
+SKIP_EXISTING_DOCUMENTS = True
 
-LOG_FOLDER = OUTPUT_FOLDER / "logs"
 
-METADATA_FOLDER = OUTPUT_FOLDER / "metadata"
+# =============================================================================
+# OUTPUT FOLDER NAMES
+# =============================================================================
 
-TEMP_FOLDER = OUTPUT_FOLDER / "_tmp"
+PAGE_FOLDER_PREFIX = "page_"
 
-# ==========================================================
-# DATABASES
-# ==========================================================
+RAW_IMAGE_FOLDER = "raw"
+CROP_FOLDER = "crops"
+CLEAN_FOLDER = "cleaned"
 
-MASTER_DATABASE = METADATA_FOLDER / "master_database.csv"
+CSV_FILENAME = "metadata.csv"
+LOG_FILENAME = "process.log"
 
-DOCUMENT_DATABASE = METADATA_FOLDER / "document_database.csv"
 
-# ==========================================================
-# MODELS
-# ==========================================================
+# =============================================================================
+# PDF RENDER SETTINGS
+# =============================================================================
 
-MODELS_FOLDER = PROJECT_ROOT / "models"
+RENDER_DPI = 300
 
-YOLO_MODEL = MODELS_FOLDER / "best.pt"
+IMAGE_FORMAT = "png"
 
-# ==========================================================
-# RECOGNITION
-# ==========================================================
+PAGE_NAME_TEMPLATE = "page_{:03d}"
 
-ENABLE_DECIMER = True
+IMAGE_NAME_TEMPLATE = "image_{:03d}.png"
 
-ENABLE_MOLSCRIBE = True
 
-TRY_HAND_DRAWN = True
+# =============================================================================
+# YOLO SETTINGS
+# =============================================================================
 
-USE_PUBCHEM = True
+YOLO_CONFIDENCE_THRESHOLD = 0.25
 
-# ==========================================================
-# IMAGE PROCESSING
-# ==========================================================
+SAVE_DETECTION_VISUALIZATION = False
 
-DEFAULT_DPI = 300
 
-TARGET_IMAGE_SIZE = 512
+# =============================================================================
+# IMAGE CLEANING
+# =============================================================================
 
-IMAGE_PADDING = 20
+REMOVE_NOISE = True
 
-# ==========================================================
-# FILE TYPES
-# ==========================================================
+DESKEW_IMAGES = True
 
-SUPPORTED_PDFS = {
-    ".pdf",
-}
+BINARIZE_IMAGES = False
 
-SUPPORTED_IMAGES = {
-    ".png",
-    ".jpg",
-    ".jpeg",
-    ".bmp",
-    ".tif",
-    ".tiff",
-}
 
-# ==========================================================
-# IMAGE TYPES
-# ==========================================================
+# =============================================================================
+# DECIMER SETTINGS
+# =============================================================================
 
-IMAGE_TYPE_FORMULA = "FORMULA"
+RUN_DECIMER = True
 
-IMAGE_TYPE_FIGURE = "FIGURE"
+SAVE_SMILES = True
 
-IMAGE_TYPE_UNKNOWN = "UNKNOWN"
 
-# ==========================================================
-# PIPELINE STATUS
-# ==========================================================
+# =============================================================================
+# METADATA COLUMNS
+# =============================================================================
 
-STATUS_PENDING = "PENDING"
+METADATA_COLUMNS = [
 
-STATUS_RENDERED = "RENDERED"
-
-STATUS_SEGMENTED = "SEGMENTED"
-
-STATUS_CLEANED = "CLEANED"
-
-STATUS_RECOGNIZED = "RECOGNIZED"
-
-STATUS_FAILED = "FAILED"
-
-STATUS_SKIPPED = "SKIPPED"
-
-# ==========================================================
-# MASTER DATABASE COLUMNS
-# ==========================================================
-
-MASTER_DATABASE_COLUMNS = [
-
-    "doc_id",
+    "document_id",
 
     "pdf_name",
 
@@ -143,11 +118,7 @@ MASTER_DATABASE_COLUMNS = [
 
     "image_path",
 
-    "clean_path",
-
-    "redraw_png",
-
-    "redraw_svg",
+    "clean_image_path",
 
     "image_type",
 
@@ -155,75 +126,35 @@ MASTER_DATABASE_COLUMNS = [
 
     "smiles",
 
-    "formula",
+    "processing_status",
 
-    "molecular_weight",
-
-    "confidence",
-
-    "agreement",
-
-    "votes",
-
-    "pubchem",
-
-    "needs_review",
-
-    "processed",
+    "error_message"
 
 ]
 
-# ==========================================================
-# DOCUMENT DATABASE COLUMNS
-# ==========================================================
 
-DOCUMENT_DATABASE_COLUMNS = [
+# =============================================================================
+# LOGGING
+# =============================================================================
 
-    "doc_id",
+LOG_LEVEL = "INFO"
 
-    "pdf_name",
+ENABLE_FILE_LOGGING = True
 
-    "pdf_hash",
+ENABLE_CONSOLE_LOGGING = True
 
-    "processed_on",
 
-]
+# =============================================================================
+# TEMP FILE SETTINGS
+# =============================================================================
 
-# ==========================================================
-# CREATE DIRECTORIES
-# ==========================================================
+DELETE_TEMP_FILES = False
 
-DIRECTORIES = [
 
-    INPUT_FOLDER,
+# =============================================================================
+# CONTAINER SETTINGS
+# =============================================================================
 
-    OUTPUT_FOLDER,
+CONTAINER_NAME = "decimer_pipeline"
 
-    RENDERED_FOLDER,
-
-    SEGMENTED_FOLDER,
-
-    CLEANED_FOLDER,
-
-    REDRAW_FOLDER,
-
-    REDRAW_PNG_FOLDER,
-
-    REDRAW_SVG_FOLDER,
-
-    LOG_FOLDER,
-
-    METADATA_FOLDER,
-
-    TEMP_FOLDER,
-
-    MODELS_FOLDER,
-
-]
-
-# ==========================================================
-# CREATE ALL DIRECTORIES
-# ==========================================================
-
-for directory in DIRECTORIES:
-    directory.mkdir(parents=True, exist_ok=True)
+PIPELINE_VERSION = "1.0.0"

@@ -1,101 +1,144 @@
 """
-core/inventory.py
+inventory.py
 
-Scans PDF files, removes duplicates using SHA256 hashes,
-and builds the document inventory.
+Maintains a document-level inventory for all processed PDFs.
 
-Author: DECIMER Pipeline
+Responsibilities
+----------------
+1. Register new PDF documents
+2. Check if a document was already processed
+3. Store document-level metadata
+4. Export inventory to CSV
 """
 
 from pathlib import Path
-from typing import List
-
+from datetime import datetime
 import pandas as pd
 
-from core.config import DOCUMENT_DATABASE_COLUMNS
-from core.hashing import HashManager
+from config import OUTPUT_ROOT
 
 
-class PDFInventory:
-    """
-    Handles PDF discovery and inventory creation.
-    """
+class InventoryManager:
+
+    INVENTORY_FILE = OUTPUT_ROOT / "document_inventory.csv"
+
+    COLUMNS = [
+        "document_id",
+        "pdf_name",
+        "pdf_path",
+        "processed_on",
+        "status"
+    ]
 
     def __init__(self):
-        self._seen_hashes = set()
 
-    def collect_pdfs(self, inputs: List[str]) -> List[Path]:
+        if self.INVENTORY_FILE.exists():
+
+            self.df = pd.read_csv(self.INVENTORY_FILE)
+
+        else:
+
+            self.df = pd.DataFrame(columns=self.COLUMNS)
+
+            self.save()
+
+    # ---------------------------------------------------------
+    # Public Methods
+    # ---------------------------------------------------------
+
+    def register_document(
+        self,
+        document_id,
+        pdf_path,
+        status="PROCESSING"
+    ):
         """
-        Collect PDF files from a list of files and/or directories.
-
-        Parameters
-        ----------
-        inputs : List[str]
-
-        Returns
-        -------
-        List[Path]
-        """
-
-        pdf_files = []
-
-        for item in inputs:
-
-            path = Path(item)
-
-            if path.is_file() and path.suffix.lower() == ".pdf":
-                pdf_files.append(path)
-
-            elif path.is_dir():
-                pdf_files.extend(sorted(path.rglob("*.pdf")))
-
-        return pdf_files
-
-    def build_inventory(self, pdf_paths: List[Path]) -> pd.DataFrame:
-        """
-        Build the document inventory.
-
-        Duplicate PDFs are removed using SHA256 hashes.
-
-        Parameters
-        ----------
-        pdf_paths : List[Path]
-
-        Returns
-        -------
-        pd.DataFrame
+        Register a document in the inventory.
         """
 
-        records = []
+        pdf_path = Path(pdf_path)
 
-        self._seen_hashes.clear()
+        if self.document_exists(document_id):
+            return
 
-        for pdf in pdf_paths:
+        row = {
 
-            pdf_hash = HashManager.sha256(pdf)
+            "document_id": document_id,
 
-            if pdf_hash in self._seen_hashes:
-                continue
+            "pdf_name": pdf_path.name,
 
-            self._seen_hashes.add(pdf_hash)
+            "pdf_path": str(pdf_path.resolve()),
 
-            records.append({
+            "processed_on": datetime.now().isoformat(),
 
-                "doc_id": None,
+            "status": status
 
-                "pdf_name": pdf.name,
+        }
 
-                "pdf_hash": pdf_hash,
+        self.df.loc[len(self.df)] = row
 
-                "processed_on": None
+        self.save()
 
-            })
-
-        return pd.DataFrame(records, columns=DOCUMENT_DATABASE_COLUMNS)
-
-    def unique_pdfs(self, inventory: pd.DataFrame) -> List[str]:
+    def update_status(
+        self,
+        document_id,
+        status
+    ):
         """
-        Return the unique PDF names contained in the inventory.
+        Update processing status.
         """
 
-        return inventory["pdf_name"].tolist()
+        index = self.df[
+            self.df["document_id"] == document_id
+        ].index
+
+        if len(index) == 0:
+            return
+
+        self.df.loc[index, "status"] = status
+
+        self.save()
+
+    def document_exists(
+        self,
+        document_id
+    ):
+        """
+        Returns True if document already exists.
+        """
+
+        return document_id in self.df["document_id"].values
+
+    def get_document(
+        self,
+        document_id
+    ):
+        """
+        Return document information.
+        """
+
+        result = self.df[
+            self.df["document_id"] == document_id
+        ]
+
+        if len(result) == 0:
+            return None
+
+        return result.iloc[0].to_dict()
+
+    def list_documents(self):
+        """
+        Return entire inventory.
+        """
+
+        return self.df.copy()
+
+    def save(self):
+        """
+        Save inventory CSV.
+        """
+
+        self.df.to_csv(
+            self.INVENTORY_FILE,
+            index=False
+        )

@@ -1,127 +1,117 @@
 """
-core/renderer.py
+renderer.py
 
-Renders PDF pages into high-resolution PNG images.
+PDF Rendering Module
 
 Responsibilities
 ----------------
-- Open PDF documents
-- Render pages at configurable DPI
-- Save rendered images
-- Return metadata for each rendered page
+1. Render each page of a PDF to an image.
+2. Save page images into the appropriate document/page folder.
+3. Return information about the rendered pages.
 
-Author: DECIMER Pipeline
+Author: Abhiram
 """
 
+from dataclasses import dataclass
 from pathlib import Path
-from typing import List
+import fitz  # PyMuPDF
 
-import fitz
-from PIL import Image
+from config import (
+    RENDER_DPI,
+    IMAGE_FORMAT,
+    PAGE_NAME_TEMPLATE,
+    RAW_IMAGE_FOLDER,
+)
+
+
+@dataclass
+class RenderedPage:
+    """
+    Represents one rendered PDF page.
+    """
+
+    page_number: int
+    image_path: Path
 
 
 class PDFRenderer:
-    """
-    Renders PDF pages into PNG images.
-    """
 
-    def __init__(self, output_folder: Path, dpi: int = 300):
-        self.output_folder = output_folder
+    def __init__(self, dpi=RENDER_DPI):
         self.dpi = dpi
 
-    def render_page(self, page: fitz.Page) -> Image.Image:
+    def render(
+        self,
+        pdf_path: Path,
+        output_directory: Path,
+    ):
         """
-        Render a single PDF page.
-
-        Parameters
-        ----------
-        page : fitz.Page
-
-        Returns
-        -------
-        PIL.Image
-        """
-
-        zoom = self.dpi / 72
-
-        matrix = fitz.Matrix(zoom, zoom)
-
-        pixmap = page.get_pixmap(
-            matrix=matrix,
-            alpha=False
-        )
-
-        image = Image.frombytes(
-            "RGB",
-            [pixmap.width, pixmap.height],
-            pixmap.samples
-        )
-
-        return image
-
-    def render_pdf(self, pdf_path: Path) -> List[dict]:
-        """
-        Render every page of a PDF.
+        Render every page of the PDF.
 
         Parameters
         ----------
         pdf_path : Path
+            Input PDF
+
+        output_directory : Path
+            Document output folder
 
         Returns
         -------
-        List[dict]
-            Metadata for every rendered page.
+        list[RenderedPage]
         """
 
-        pdf_name = pdf_path.stem
+        pdf_path = Path(pdf_path)
 
-        save_folder = self.output_folder / pdf_name
-
-        save_folder.mkdir(
-            parents=True,
-            exist_ok=True
-        )
+        if not pdf_path.exists():
+            raise FileNotFoundError(pdf_path)
 
         document = fitz.open(pdf_path)
 
-        page_records = []
+        rendered_pages = []
 
-        try:
+        zoom = self.dpi / 72
+        matrix = fitz.Matrix(zoom, zoom)
 
-            for page_index in range(len(document)):
+        for page_index in range(len(document)):
 
-                page = document.load_page(page_index)
+            page = document.load_page(page_index)
 
-                image = self.render_page(page)
+            page_folder = (
+                output_directory /
+                PAGE_NAME_TEMPLATE.format(page_index + 1)
+            )
 
-                filename = (
-                    f"{pdf_name}_page_{page_index + 1:03d}.png"
+            raw_folder = page_folder / RAW_IMAGE_FOLDER
+
+            raw_folder.mkdir(
+                parents=True,
+                exist_ok=True
+            )
+
+            image_path = (
+                raw_folder /
+                f"page.{IMAGE_FORMAT}"
+            )
+
+            pix = page.get_pixmap(
+                matrix=matrix,
+                alpha=False
+            )
+
+            pix.save(str(image_path))
+
+            rendered_pages.append(
+
+                RenderedPage(
+
+                    page_number=page_index + 1,
+
+                    image_path=image_path
+
                 )
 
-                filepath = save_folder / filename
+            )
 
-                image.save(filepath)
+        document.close()
 
-                page_records.append({
-
-                    "pdf_name": pdf_name,
-
-                    "page_number": page_index + 1,
-
-                    "filename": filename,
-
-                    "filepath": str(filepath),
-
-                    "width": image.width,
-
-                    "height": image.height,
-
-                    "dpi": self.dpi
-
-                })
-
-        finally:
-
-            document.close()
-
-        return page_records
+        return rendered_pages

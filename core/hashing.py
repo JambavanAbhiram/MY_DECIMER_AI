@@ -1,80 +1,107 @@
 """
-core/hashing.py
+hashing.py
 
-Utility functions for generating cryptographic hashes.
+Document ID Generation
 
-Currently used for:
-    - Duplicate PDF detection
-    - Document identification
-    - Integrity verification
+Responsibilities
+----------------
+1. Generate deterministic document IDs.
+2. Compute SHA-256 hashes for PDF files.
+3. Support hashing from both file paths and PDF blobs.
 
-Author: DECIMER Pipeline
+Author: Abhiram
 """
 
 from pathlib import Path
 import hashlib
 
-class HashManager:
+
+CHUNK_SIZE = 1024 * 1024  # 1 MB
+
+
+def sha256_from_file(pdf_path):
     """
-    Handles hashing operations for project files.
+    Compute SHA-256 hash of a PDF file.
+
+    Parameters
+    ----------
+    pdf_path : str | Path
+
+    Returns
+    -------
+    str
+        Hexadecimal SHA-256 hash.
     """
 
-    CHUNK_SIZE = 8192
+    pdf_path = Path(pdf_path)
 
-    @staticmethod
-    def sha256(file_path: Path) -> str:
-        """
-        Compute the SHA256 hash of a file.
+    if not pdf_path.exists():
+        raise FileNotFoundError(pdf_path)
 
-        Parameters
-        ----------
-        file_path : Path
-            Path to the file.
+    hasher = hashlib.sha256()
 
-        Returns
-        -------
-        str
-            SHA256 hexadecimal digest.
-        """
-        hasher = hashlib.sha256()
+    with open(pdf_path, "rb") as file:
 
-        with open(file_path, "rb") as file:
-            while chunk := file.read(HashManager.CHUNK_SIZE):
-                hasher.update(chunk)
+        while True:
 
-        return hasher.hexdigest()
+            chunk = file.read(CHUNK_SIZE)
 
-    @staticmethod
-    def md5(file_path: Path) -> str:
-        """
-        Compute the MD5 hash of a file.
+            if not chunk:
+                break
 
-        Useful for quick comparisons.
-        Not recommended for security.
-        """
-        hasher = hashlib.md5()
+            hasher.update(chunk)
 
-        with open(file_path, "rb") as file:
-            while chunk := file.read(HashManager.CHUNK_SIZE):
-                hasher.update(chunk)
+    return hasher.hexdigest()
 
-        return hasher.hexdigest()
 
-    @staticmethod
-    def verify(file_path: Path, expected_hash: str) -> bool:
-        """
-        Verify a SHA256 hash.
+def sha256_from_bytes(pdf_bytes):
+    """
+    Compute SHA-256 hash of a PDF blob.
 
-        Parameters
-        ----------
-        file_path : Path
-            File to verify.
+    Parameters
+    ----------
+    pdf_bytes : bytes
 
-        expected_hash : str
-            Expected SHA256 hash.
+    Returns
+    -------
+    str
+    """
 
-        Returns
-        -------
-        bool
-        """
-        return HashManager.sha256(file_path) == expected_hash
+    hasher = hashlib.sha256()
+
+    hasher.update(pdf_bytes)
+
+    return hasher.hexdigest()
+
+
+def generate_document_id(input_data):
+    """
+    Generate a document ID from either
+
+        • PDF Path
+        • PDF Blob
+
+    Parameters
+    ----------
+    input_data
+        Path | str | bytes
+
+    Returns
+    -------
+    str
+        SHA-256 document ID.
+    """
+
+    if isinstance(input_data, bytes):
+
+        return sha256_from_bytes(input_data)
+
+    elif isinstance(input_data, (str, Path)):
+
+        return sha256_from_file(input_data)
+
+    else:
+
+        raise TypeError(
+            "Input must be a PDF path or PDF bytes."
+        )

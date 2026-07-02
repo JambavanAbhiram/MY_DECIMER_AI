@@ -1,225 +1,230 @@
 """
 pipeline.py
 
-Main orchestration pipeline for the DECIMER Project.
+Main orchestration pipeline for the DECIMER project.
 
-Supports
+Responsibilities:
+    • Accept PDF path or PDF blob
+    • Generate document ID
+    • Create output folder structure
+    • Render PDF pages
+    • Detect and crop chemical structures
+    • Clean cropped images
+    • Run DECIMER
+    • Export metadata CSV
 
-    • PDF files
-    • Image files
-    • Folders containing either
-
-Pipeline
-
-PDF
-    ↓
-Render
-    ↓
-Segment
-    ↓
-Recognition
-
-PNG
-    ↓
-Recognition
-
-Author: DECIMER Project
+Author: Abhiram
 """
 
-from datetime import datetime
 from pathlib import Path
-import uuid
+from tempfile import NamedTemporaryFile
 
-from core.config import (
-    DEFAULT_DPI,
-    RENDERED_FOLDER,
-    SEGMENTED_FOLDER,
-    CLEANED_FOLDER,
-)
-
-from core.inventory import PDFInventory
-from core.metadata import MetadataManager
+from core.config import OUTPUT_DIR, DELETE_TEMP_FILES
+from core.hashing import generate_document_id
+from core.inventory import InventoryManager
 from core.renderer import PDFRenderer
-from core.segmentation import ChemicalSegmenter
-from core.hashing import HashManager
-
-from recognition.processor import RecognitionProcessor
+from core.segmentation import StructureSegmenter
+from recognition.processor import ImageProcessor
+from core.metadata import MetadataManager
 
 
 class Pipeline:
 
-    IMAGE_EXTENSIONS = {
-        ".png",
-        ".jpg",
-        ".jpeg",
-        ".bmp",
-        ".tif",
-        ".tiff",
-    }
-
     def __init__(self):
 
-        self.inventory = PDFInventory()
-
+        self.inventory = InventoryManager()
+        self.renderer = PDFRenderer()
+        self.segmenter = StructureSegmenter()
+        self.processor = ImageProcessor()
         self.metadata = MetadataManager()
 
-        self.renderer = PDFRenderer(
-            output_folder=RENDERED_FOLDER,
-            dpi=DEFAULT_DPI,
-        )
+    # ---------------------------------------------------------
+    # Public API
+    # ---------------------------------------------------------
 
-        self.segmenter = ChemicalSegmenter(
-            output_folder=SEGMENTED_FOLDER,
-        )
+    def run(self, input_data):
+        """
+        Process a PDF.
 
-        self.recognition = RecognitionProcessor()
+        Parameters
+        ----------
+        input_data : str | Path | bytes
 
-    # ------------------------------------------------------------
+        Returns
+        -------
+        dict
+        """
 
-    def run(self, inputs):
+        pdf_path = self._prepare_input(input_data)
 
-        for item in inputs:
-            path = Path(item)
+        document_id = generate_document_id(pdf_path)
 
-            if not path.exists():
-                print(f"Skipping {path}")
-                continue
+        # -------------------------------------------------
+        # Create output folders
+        # -------------------------------------------------
 
-            if path.is_file():
-                self._process_file(path)
+        document_dir = Path(OUTPUT_DIR) / document_id
+        document_dir.mkdir(parents=True, exist_ok=True)
 
-            elif path.is_dir():
-                self._process_folder(path)
-        print("\nPipeline finished.")
+        metadata_csv = document_dir / "metadata.csv"
 
-    # ------------------------------------------------------------
+        try:
 
-    def _process_folder(self, folder):
+            # -------------------------------------------------
+            # Register document
+            # -------------------------------------------------
 
-        for file in sorted(folder.rglob("*")):
-            if file.is_file():
-                self._process_file(file)
+            self.inventory.register_document(
+                document_id=document_id,
+                pdf_path=pdf_path,
+            )
 
-    # ------------------------------------------------------------
+            # -------------------------------------------------
+            # Render pages
+            # -------------------------------------------------
 
-    def _process_file(self, file):
+            rendered_pages = self.renderer.render(
+                pdf_path=pdf_path,
+                output_directory=document_dir,
+            )
 
-        suffix = file.suffix.lower()
+            # -------------------------------------------------
+            # Process every rendered page
+            # -------------------------------------------------
 
-        if suffix == ".pdf":
-            self._process_pdf(file)
+            for page in rendered_pages:
 
-        elif suffix in self.IMAGE_EXTENSIONS:
-            self._process_image(file)
-
-    # ------------------------------------------------------------
-
-    def _process_pdf(self, pdf_path):
-
-        pdf_hash = HashManager.sha256(pdf_path)
-
-        if self.metadata.document_exists(pdf_hash):
-            print(f"Skipping duplicate PDF: {pdf_path.name}")
-            return
-        
-        doc_id = str(uuid.uuid4())
-
-        self.metadata.add_document({
-            "doc_id": doc_id,
-            "pdf_name": pdf_path.name,
-            "pdf_hash": pdf_hash,
-            "processed_on": datetime.now(),
-        })
-
-        print(f"\nProcessing PDF : {pdf_path.name}")
-        pages = self.renderer.render_pdf(pdf_path)
-
-        for page in pages:
-            structures = self.segmenter.segment_page(page)
-
-            for structure in structures:
-                self._recognize_structure(
-                    doc_id,
-                    pdf_path.name,
-                    structure,
+                page_directory = (
+                    document_dir /
+                    f"page_{page.page_number:03d}"
                 )
 
-    # ------------------------------------------------------------
+                page_directory.mkdir(
+                    parents=True,
+                    exist_ok=True
+                )
 
-    def _process_image(self, image_path):
+                detections = self.segmenter.segment(
+                    page_image=page.image_path,
+                    output_directory=page_directory,
+                )
 
-        print(f"\nProcessing Image : {image_path.name}")
-        structure = {
-            "page_number": 1,
-            "image_path": str(image_path),
-        }
+                for detection in detections:
 
-        self._recognize_structure(
-            None,
-            image_path.name,
-            structure,
-        )
+                    cleaned = self.processor.process(
+                        detection.image_path,
+                        page_directory,
+                    )
 
-    # ------------------------------------------------------------
+                    smiles = self.processor.run_decimer(
+                        cleaned
+                    )
 
-    def _recognize_structure(self, doc_id, document_name, structure):
-        image_id = str(uuid.uuid4())
-        image_path = Path(
-            structure["image_path"]
-        )
+                    self.metadata.add_entry(
 
-        cleaned = (
-            CLEANED_FOLDER
-            / f"{image_id}.png"
-        )
+                        document_id=document_id,
 
-        redraw_png = (
-            CLEANED_FOLDER
-            / f"{image_id}_redraw.png"
-        )
+                        pdf_name=pdf_path.name,
 
-        redraw_svg = (
-            CLEANED_FOLDER
-            / f"{image_id}_redraw.svg"
-        )
+                        page_number=page.page_number,
 
-        result = self.recognition.process_image(
-            image_path,
-            cleaned,
-            redraw_png,
-            redraw_svg,
-        )
+                        image_id=detection.image_id,
 
-        self.metadata.add_image({
-            "doc_id": doc_id,
-            "pdf_name": document_name,
-            "page_number": structure.get(
-                "page_number",
-                1,
-            ),
-            "image_id": image_id,
-            "image_path": str(image_path),
-            "clean_path": str(cleaned),
-            "image_type": "FORMULA",
-            "is_formula": result["success"],
-            "smiles": result.get(
-                "smiles",
-                "",
-            ),
-        
-            "processed": (
-                "RECOGNIZED"
-                if result["success"]
-                else "FAILED"
-            ),
-        })
+                        image_path=detection.image_path,
 
-        if result["success"]:
-            print(
-                f"{image_path.name}"
-                f" -> {result['smiles']}"
+                        clean_image_path=cleaned,
+
+                        image_type=detection.image_type,
+
+                        is_formula=detection.is_formula,
+
+                        smiles=smiles,
+
+                        processing_status="SUCCESS",
+
+                        error_message=""
+
+                    )
+
+            self.metadata.export(metadata_csv)
+
+            return {
+
+                "status": "SUCCESS",
+
+                "document_id": document_id,
+
+                "output_directory": str(document_dir),
+
+                "metadata_csv": str(metadata_csv)
+
+            }
+
+        except Exception as e:
+
+            self.metadata.add_pipeline_error(
+                document_id=document_id,
+                error_message=str(e)
             )
-        else:
-            print(
-                f"{image_path.name}"
+
+            self.metadata.export(metadata_csv)
+
+            return {
+
+                "status": "FAILED",
+
+                "document_id": document_id,
+
+                "error": str(e),
+
+                "output_directory": str(document_dir)
+
+            }
+
+        finally:
+
+            if DELETE_TEMP_FILES:
+                self._cleanup_temp(pdf_path, input_data)
+
+    # ---------------------------------------------------------
+    # Internal Helpers
+    # ---------------------------------------------------------
+
+    def _prepare_input(self, input_data):
+        """
+        Accept either
+
+        • str
+        • Path
+        • bytes
+
+        Returns a Path object.
+        """
+
+        if isinstance(input_data, (str, Path)):
+            return Path(input_data)
+
+        elif isinstance(input_data, bytes):
+
+            temp_pdf = NamedTemporaryFile(
+                suffix=".pdf",
+                delete=False
             )
+
+            temp_pdf.write(input_data)
+            temp_pdf.close()
+
+            return Path(temp_pdf.name)
+
+        raise TypeError(
+            "Input must be a PDF path or PDF blob."
+        )
+
+    def _cleanup_temp(self, pdf_path, original_input):
+
+        if isinstance(original_input, bytes):
+
+            try:
+                pdf_path.unlink(missing_ok=True)
+            except Exception:
+                pass

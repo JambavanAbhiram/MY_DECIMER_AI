@@ -1,328 +1,169 @@
 """
-core/metadata.py
+metadata.py
 
-Metadata manager for the DECIMER Project.
+Metadata Manager
 
 Responsibilities
 ----------------
-- Manage document_database.csv
-- Manage master_database.csv
-- Add/update documents
-- Add/update images
-- Prevent duplicates
-- Provide lookup utilities
+1. Store image-level metadata.
+2. Record pipeline errors.
+3. Export metadata to CSV.
 
-Author: DECIMER Project
+Author: Abhiram
 """
 
 from pathlib import Path
-from typing import Dict, Optional
-
 import pandas as pd
 
-from core.config import (
-    DOCUMENT_DATABASE,
-    MASTER_DATABASE,
-    DOCUMENT_DATABASE_COLUMNS,
-    MASTER_DATABASE_COLUMNS,
-)
+from config import METADATA_COLUMNS
 
 
 class MetadataManager:
     """
-    Handles all metadata operations.
+    Manages metadata for every detected chemical structure.
     """
 
     def __init__(self):
-
-        self.document_database = DOCUMENT_DATABASE
-
-        self.master_database = MASTER_DATABASE
-
-        self._initialize()
+        self.records = []
 
     # ---------------------------------------------------------
-
-    def _initialize(self):
-
-        self.document_database.parent.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
-
-        if not self.document_database.exists():
-
-            pd.DataFrame(
-                columns=DOCUMENT_DATABASE_COLUMNS
-            ).to_csv(
-                self.document_database,
-                index=False,
-            )
-
-        if not self.master_database.exists():
-
-            pd.DataFrame(
-                columns=MASTER_DATABASE_COLUMNS
-            ).to_csv(
-                self.master_database,
-                index=False,
-            )
-
+    # Public Methods
     # ---------------------------------------------------------
 
-    def load_document_database(self):
-
-        return pd.read_csv(
-            self.document_database
-        )
-
-    # ---------------------------------------------------------
-
-    def load_master_database(self):
-
-        return pd.read_csv(
-            self.master_database
-        )
-
-    # ---------------------------------------------------------
-
-    def save_document_database(
+    def add_entry(
         self,
-        dataframe,
+        document_id,
+        pdf_name,
+        page_number,
+        image_id,
+        image_path,
+        clean_image_path,
+        image_type,
+        is_formula,
+        smiles,
+        processing_status,
+        error_message=""
     ):
+        """
+        Add one processed image to the metadata.
+        """
 
-        dataframe.to_csv(
-            self.document_database,
-            index=False,
-        )
+        self.records.append({
+
+            "document_id": document_id,
+
+            "pdf_name": pdf_name,
+
+            "page_number": page_number,
+
+            "image_id": image_id,
+
+            "image_path": str(image_path),
+
+            "clean_image_path": str(clean_image_path),
+
+            "image_type": image_type,
+
+            "is_formula": is_formula,
+
+            "smiles": smiles,
+
+            "processing_status": processing_status,
+
+            "error_message": error_message
+
+        })
 
     # ---------------------------------------------------------
 
-    def save_master_database(
+    def add_pipeline_error(
         self,
-        dataframe,
+        document_id,
+        error_message
     ):
+        """
+        Record a pipeline-level failure.
+        """
 
-        dataframe.to_csv(
-            self.master_database,
-            index=False,
-        )
+        self.records.append({
 
-    # ---------------------------------------------------------
+            "document_id": document_id,
 
-    def document_exists(
-        self,
-        pdf_hash: str,
-    ) -> bool:
+            "pdf_name": "",
 
-        df = self.load_document_database()
+            "page_number": "",
 
-        return pdf_hash in df["pdf_hash"].values
+            "image_id": "",
 
-    # ---------------------------------------------------------
+            "image_path": "",
 
-    def image_exists(
-        self,
-        image_id: str,
-    ) -> bool:
+            "clean_image_path": "",
 
-        df = self.load_master_database()
+            "image_type": "",
 
-        return image_id in df["image_id"].values
+            "is_formula": "",
 
-    # ---------------------------------------------------------
+            "smiles": "",
 
-    def add_document(
-        self,
-        record: Dict,
-    ):
+            "processing_status": "FAILED",
 
-        df = self.load_document_database()
+            "error_message": error_message
 
-        df.loc[len(df)] = record
-
-        self.save_document_database(df)
-
-    # ---------------------------------------------------------
-
-    def add_image(
-        self,
-        record: Dict,
-    ):
-
-        df = self.load_master_database()
-
-        df.loc[len(df)] = record
-
-        self.save_master_database(df)
-
-    # ---------------------------------------------------------
-
-    def update_image(
-        self,
-        image_id: str,
-        **kwargs,
-    ):
-
-        df = self.load_master_database()
-
-        index = df.index[
-            df["image_id"] == image_id
-        ]
-
-        if len(index) == 0:
-
-            return False
-
-        index = index[0]
-
-        for key, value in kwargs.items():
-
-            if key in df.columns:
-
-                df.at[index, key] = value
-
-        self.save_master_database(df)
-
-        return True
-
-    # ---------------------------------------------------------
-
-    def get_image(
-        self,
-        image_id: str,
-    ) -> Optional[Dict]:
-
-        df = self.load_master_database()
-
-        row = df[
-            df["image_id"] == image_id
-        ]
-
-        if row.empty:
-
-            return None
-
-        return row.iloc[0].to_dict()
-
-    # ---------------------------------------------------------
-
-    def get_document(
-        self,
-        doc_id: str,
-    ) -> Optional[Dict]:
-
-        df = self.load_document_database()
-
-        row = df[
-            df["doc_id"] == doc_id
-        ]
-
-        if row.empty:
-
-            return None
-
-        return row.iloc[0].to_dict()
-
-    # ---------------------------------------------------------
-
-    def mark_processed(
-        self,
-        image_id: str,
-        smiles: str,
-        clean_path: str,
-        redraw_png: str,
-        redraw_svg: str,
-        confidence: float,
-        agreement: float,
-        votes: int,
-        pubchem: bool,
-        needs_review: bool,
-        formula: str,
-        molecular_weight: float,
-        processed: str = "RECOGNIZED",
-    ):
-
-        self.update_image(
-
-            image_id,
-
-            smiles=smiles,
-
-            clean_path=clean_path,
-
-            redraw_png=redraw_png,
-
-            redraw_svg=redraw_svg,
-
-            confidence=confidence,
-
-            agreement=agreement,
-
-            votes=votes,
-
-            pubchem=pubchem,
-
-            needs_review=needs_review,
-
-            formula=formula,
-
-            molecular_weight=molecular_weight,
-
-            processed=processed,
-
-        )
-
-    # ---------------------------------------------------------
-
-    def failed(
-        self,
-        image_id: str,
-        reason: str = "FAILED",
-    ):
-
-        self.update_image(
-
-            image_id,
-
-            processed=reason,
-
-        )
-
-    # ---------------------------------------------------------
-
-    def statistics(self):
-
-        df = self.load_master_database()
-
-        return {
-
-            "total_images": len(df),
-
-            "recognized": int(
-                (df["processed"] == "RECOGNIZED").sum()
-            ),
-
-            "failed": int(
-                (df["processed"] == "FAILED").sum()
-            ),
-
-            "needs_review": int(
-                df["needs_review"].fillna(False).sum()
-            ),
-
-        }
+        })
 
     # ---------------------------------------------------------
 
     def export(
         self,
-        path: str | Path,
+        csv_path
     ):
+        """
+        Export metadata to CSV.
+        """
 
-        df = self.load_master_database()
+        csv_path = Path(csv_path)
+
+        csv_path.parent.mkdir(
+            parents=True,
+            exist_ok=True
+        )
+
+        df = pd.DataFrame(
+            self.records,
+            columns=METADATA_COLUMNS
+        )
 
         df.to_csv(
-            path,
-            index=False,
+            csv_path,
+            index=False
         )
+
+    # ---------------------------------------------------------
+
+    def clear(self):
+        """
+        Remove all stored metadata.
+        """
+
+        self.records.clear()
+
+    # ---------------------------------------------------------
+
+    def get_dataframe(self):
+        """
+        Return metadata as a pandas DataFrame.
+        """
+
+        return pd.DataFrame(
+            self.records,
+            columns=METADATA_COLUMNS
+        )
+
+    # ---------------------------------------------------------
+
+    def __len__(self):
+        """
+        Number of metadata records.
+        """
+
+        return len(self.records)
