@@ -15,7 +15,7 @@ from pathlib import Path
 from datetime import datetime
 import pandas as pd
 
-from config import OUTPUT_ROOT
+from core.config import OUTPUT_ROOT
 
 
 class InventoryManager:
