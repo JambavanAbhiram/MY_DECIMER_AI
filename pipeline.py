@@ -19,7 +19,7 @@ Author: Abhiram
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from core.config import OUTPUT_DIR, DELETE_TEMP_FILES
+from core.config import OUTPUT_ROOT, DELETE_TEMP_FILES
 from core.hashing import generate_document_id
 from core.inventory import InventoryManager
 from core.renderer import PDFRenderer
@@ -63,7 +63,7 @@ class Pipeline:
         # Create output folders
         # -------------------------------------------------
 
-        document_dir = Path(OUTPUT_DIR) / document_id
+        document_dir = Path(OUTPUT_ROOT) / document_id
         document_dir.mkdir(parents=True, exist_ok=True)
 
         metadata_csv = document_dir / "metadata.csv"
