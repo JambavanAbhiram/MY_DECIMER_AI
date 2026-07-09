@@ -15,7 +15,7 @@ Author: Abhiram
 from pathlib import Path
 import pandas as pd
 
-from config import METADATA_COLUMNS
+from core.config import METADATA_COLUMNS
 
 
 class MetadataManager:

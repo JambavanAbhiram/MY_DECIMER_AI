@@ -4,7 +4,7 @@ from .recognizer import DecimerRecognizer
 from .consensus import ConsensusEngine
 from .validator import SmilesValidator
 from .redraw import MoleculeRenderer
-from .processor import RecognitionProcessor
+from .processor import ImageProcessor
 
 __all__ = [
     "ImageCleaner",
@@ -13,7 +13,7 @@ __all__ = [
     "ConsensusEngine",
     "SmilesValidator",
     "MoleculeRenderer",
-    "RecognitionProcessor",
+    "ImageProcessor",
 ]
 
 __version__ = "2.0.0"

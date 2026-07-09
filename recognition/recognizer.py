@@ -15,8 +15,7 @@ from PIL import Image
 from rdkit import Chem
 from rdkit.Chem.MolStandardize import rdMolStandardize
 
-from core.config import TEMP_FOLDER
-
+from core.config import TEMP_ROOT
 
 class DecimerRecognizer:
 
@@ -40,7 +39,7 @@ class DecimerRecognizer:
         self.use_pubchem=use_pubchem
         self.use_molscribe=use_molscribe
 
-        self.work_dir=Path(TEMP_FOLDER)
+        self.work_dir=Path(TEMP_ROOT)/"recognizer"
         self.work_dir.mkdir(
             parents=True,
             exist_ok=True

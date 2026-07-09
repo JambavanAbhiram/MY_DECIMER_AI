@@ -19,7 +19,7 @@ from pathlib import Path
 import cv2
 from ultralytics import YOLO
 
-from config import (
+from core.config import (
     CROP_FOLDER,
     IMAGE_NAME_TEMPLATE,
     YOLO_CONFIDENCE_THRESHOLD,

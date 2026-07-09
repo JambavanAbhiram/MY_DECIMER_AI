@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import fitz  # PyMuPDF
 
-from config import (
+from core.config import (
     RENDER_DPI,
     IMAGE_FORMAT,
     PAGE_NAME_TEMPLATE,

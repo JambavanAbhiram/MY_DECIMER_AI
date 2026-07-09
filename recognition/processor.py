@@ -22,7 +22,7 @@ from .validator import SmilesValidator
 from .redraw import MoleculeRenderer
 
 
-class RecognitionProcessor:
+class ImageProcessor:
 
     def __init__(self):
 
