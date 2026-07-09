@@ -28,28 +28,37 @@ from core.config import (
 
 @dataclass
 class Detection:
-
     image_id: int
-
     image_path: Path
-
     image_type: str
-
     is_formula: bool
-
     confidence: float
-
     bbox: tuple
 
 
 class StructureSegmenter:
 
-    def __init__(
-        self,
-        model_path="models/yolo/best.pt"
-    ):
+    def __init__(self, model_path=None):
+        """
+        Load the trained YOLO model.
+        """
 
-        self.model = YOLO(model_path)
+        if model_path is None:
+            project_root = Path(__file__).resolve().parent.parent
+            model_path = project_root / "models" / "yolo" / "best.pt"
+
+        self.model_path = Path(model_path)
+
+        if not self.model_path.exists():
+            raise FileNotFoundError(
+                "\n"
+                "YOLO model not found!\n\n"
+                f"Expected:\n{self.model_path}\n\n"
+                "Please place your trained 'best.pt' inside:\n"
+                "models/yolo/"
+            )
+
+        self.model = YOLO(str(self.model_path))
 
     def segment(
         self,
@@ -58,29 +67,19 @@ class StructureSegmenter:
     ):
         """
         Detect and crop chemical structures.
-
-        Parameters
-        ----------
-        page_image : Path
-
-        output_directory : Path
-
-        Returns
-        -------
-        list[Detection]
         """
+
+        page_image = Path(page_image)
 
         image = cv2.imread(str(page_image))
 
         if image is None:
-            raise FileNotFoundError(page_image)
+            raise FileNotFoundError(
+                f"Unable to read image:\n{page_image}"
+            )
 
         crop_folder = output_directory / CROP_FOLDER
-
-        crop_folder.mkdir(
-            parents=True,
-            exist_ok=True
-        )
+        crop_folder.mkdir(parents=True, exist_ok=True)
 
         detections = []
 
@@ -94,12 +93,10 @@ class StructureSegmenter:
 
         for result in results:
 
-            boxes = result.boxes
-
-            if boxes is None:
+            if result.boxes is None:
                 continue
 
-            for box in boxes:
+            for box in result.boxes:
 
                 x1, y1, x2, y2 = map(
                     int,
@@ -122,23 +119,14 @@ class StructureSegmenter:
                 )
 
                 detections.append(
-
                     Detection(
-
                         image_id=image_counter,
-
                         image_path=crop_path,
-
                         image_type="chemical_structure",
-
                         is_formula=True,
-
                         confidence=confidence,
-
                         bbox=(x1, y1, x2, y2)
-
                     )
-
                 )
 
                 image_counter += 1
