@@ -52,11 +52,9 @@ class StructureSegmenter:
 
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
+        image_path = Path(image_path)
 
-        structures = segment_chemical_structures_from_file(
-            image_path,
-            expand=True
-        )
+        structures = segment_chemical_structures_from_file(str(image_path), expand=True)
 
         saved_images = []
 
