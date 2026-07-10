@@ -1,40 +1,57 @@
 """
 main.py
 
-Entry point for the DECIMER pipeline.
+Entry point for the DECIMER document processing pipeline.
+
+Author: Abhiram
 """
 
 from pathlib import Path
-import sys
 
 from pipeline import Pipeline
 
 
 def main():
+
     print("=" * 60)
-    print("DECIMER Chemical Structure Recognition Pipeline")
+    print("DECIMER Document Processing Pipeline")
     print("=" * 60)
 
-    pdf_folder = input("Enter the path to the PDF folder: ").strip()
+    pdf_path = input(
+        "\nEnter PDF path (or drag & drop the PDF here):\n> "
+    ).strip().strip('"')
 
-    if not pdf_folder:
-        print("ERROR: No folder path provided.")
-        sys.exit(1)
+    pdf_path = Path(pdf_path)
 
-    pdf_folder = Path(pdf_folder)
+    if not pdf_path.exists():
 
-    if not pdf_folder.exists():
-        print(f"ERROR: Folder not found: {pdf_folder}")
-        sys.exit(1)
+        print("\nERROR: PDF not found.")
+        return
+
+    if pdf_path.suffix.lower() != ".pdf":
+
+        print("\nERROR: Input must be a PDF.")
+        return
 
     pipeline = Pipeline()
 
-    try:
-        pipeline.run(pdf_folder)
-        print("\nPipeline completed successfully.")
-    except Exception as e:
-        print(f"\nERROR\n{'-' * 32}\n{e}")
-        raise
+    result = pipeline.run(pdf_path)
+
+    print("\n" + "=" * 60)
+    print("Pipeline Finished")
+    print("=" * 60)
+
+    print(f"Status        : {result['status']}")
+    print(f"Document ID   : {result['document_id']}")
+
+    if result["status"] == "SUCCESS":
+
+        print(f"Output Folder : {result['output_directory']}")
+        print(f"Metadata CSV  : {result['metadata_csv']}")
+
+    else:
+
+        print(f"Error         : {result['error']}")
 
 
 if __name__ == "__main__":

@@ -10,7 +10,8 @@ from pathlib import Path
 # PROJECT PATHS
 # =============================================================================
 
-PROJECT_ROOT = Path(__file__).resolve().parent
+# Project root (one level above core/)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 OUTPUT_ROOT = PROJECT_ROOT / "outputs"
 TEMP_ROOT = PROJECT_ROOT / "temp"
@@ -20,31 +21,26 @@ LOG_ROOT = PROJECT_ROOT / "logs"
 for directory in [OUTPUT_ROOT, TEMP_ROOT, LOG_ROOT]:
     directory.mkdir(parents=True, exist_ok=True)
 
-
 # =============================================================================
 # INPUT SETTINGS
 # =============================================================================
 
 SUPPORTED_INPUT_TYPES = [
     "path",
-    "blob"
+    "blob",
 ]
 
 SUPPORTED_FILE_EXTENSIONS = [
-    ".pdf"
+    ".pdf",
 ]
-
 
 # =============================================================================
 # DOCUMENT SETTINGS
 # =============================================================================
 
-# SHA256 is recommended for deterministic document IDs
 DOCUMENT_ID_METHOD = "sha256"
 
-# If False, existing outputs may be overwritten
 SKIP_EXISTING_DOCUMENTS = True
-
 
 # =============================================================================
 # OUTPUT FOLDER NAMES
@@ -56,9 +52,11 @@ RAW_IMAGE_FOLDER = "raw"
 CROP_FOLDER = "crops"
 CLEAN_FOLDER = "cleaned"
 
+REDRAW_PNG_FOLDER = "redraw_png"
+REDRAW_SVG_FOLDER = "redraw_svg"
+
 CSV_FILENAME = "metadata.csv"
 LOG_FILENAME = "process.log"
-
 
 # =============================================================================
 # PDF RENDER SETTINGS
@@ -72,35 +70,27 @@ PAGE_NAME_TEMPLATE = "page_{:03d}"
 
 IMAGE_NAME_TEMPLATE = "image_{:03d}.png"
 
-
 # =============================================================================
-# YOLO SETTINGS
+# DECIMER SEGMENTATION
 # =============================================================================
 
-YOLO_CONFIDENCE_THRESHOLD = 0.25
-
-SAVE_DETECTION_VISUALIZATION = False
-
+SEGMENT_EXPAND = True
 
 # =============================================================================
 # IMAGE CLEANING
 # =============================================================================
 
 REMOVE_NOISE = True
-
 DESKEW_IMAGES = True
-
 BINARIZE_IMAGES = False
 
-
 # =============================================================================
-# DECIMER SETTINGS
+# DECIMER RECOGNITION
 # =============================================================================
 
 RUN_DECIMER = True
 
 SAVE_SMILES = True
-
 
 # =============================================================================
 # METADATA COLUMNS
@@ -128,10 +118,9 @@ METADATA_COLUMNS = [
 
     "processing_status",
 
-    "error_message"
+    "error_message",
 
 ]
-
 
 # =============================================================================
 # LOGGING
@@ -143,18 +132,16 @@ ENABLE_FILE_LOGGING = True
 
 ENABLE_CONSOLE_LOGGING = True
 
-
 # =============================================================================
-# TEMP FILE SETTINGS
+# TEMP FILES
 # =============================================================================
 
 DELETE_TEMP_FILES = False
 
-
 # =============================================================================
-# CONTAINER SETTINGS
+# CONTAINER
 # =============================================================================
 
 CONTAINER_NAME = "decimer_pipeline"
 
-PIPELINE_VERSION = "1.0.0"
+PIPELINE_VERSION = "2.0.0"

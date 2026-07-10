@@ -1,3 +1,10 @@
+"""
+recognition package
+
+Exports all public recognition components used by the DECIMER
+pipeline.
+"""
+
 from .cleaner import ImageCleaner
 from .variants import VariantGenerator
 from .recognizer import DecimerRecognizer
@@ -17,4 +24,4 @@ __all__ = [
 ]
 
 __version__ = "2.0.0"
-__author__ = "DECIMER Project"
+__author__ = "Abhiram"

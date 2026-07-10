@@ -1,134 +1,73 @@
 """
 segmentation.py
 
-Chemical Structure Detection & Segmentation
+Chemical structure segmentation using DECIMER Segmentation.
 
-Responsibilities
-----------------
-1. Detect chemical structures using YOLO.
-2. Crop each detected structure.
-3. Save cropped images.
-4. Return crop information.
+Input:
+    Path to a rendered PDF page.
 
-Author: Abhiram
+Output:
+    List of cropped chemical structure image paths.
 """
 
-from dataclasses import dataclass
 from pathlib import Path
+from typing import List
 
 import cv2
-from ultralytics import YOLO
-
-from core.config import (
-    CROP_FOLDER,
-    IMAGE_NAME_TEMPLATE,
-    YOLO_CONFIDENCE_THRESHOLD,
-)
-
-
-@dataclass
-class Detection:
-    image_id: int
-    image_path: Path
-    image_type: str
-    is_formula: bool
-    confidence: float
-    bbox: tuple
+from decimer_segmentation import segment_chemical_structures_from_file
 
 
 class StructureSegmenter:
+    """
+    Wrapper around DECIMER Segmentation.
 
-    def __init__(self, model_path=None):
-        """
-        Load the trained YOLO model.
-        """
+    Given a rendered PDF page, extracts all chemical structures
+    and saves them as individual images.
+    """
 
-        if model_path is None:
-            project_root = Path(__file__).resolve().parent.parent
-            model_path = project_root / "models" / "yolo" / "best.pt"
-
-        self.model_path = Path(model_path)
-
-        if not self.model_path.exists():
-            raise FileNotFoundError(
-                "\n"
-                "YOLO model not found!\n\n"
-                f"Expected:\n{self.model_path}\n\n"
-                "Please place your trained 'best.pt' inside:\n"
-                "models/yolo/"
-            )
-
-        self.model = YOLO(str(self.model_path))
+    def __init__(self):
+        pass
 
     def segment(
         self,
-        page_image: Path,
-        output_directory: Path
-    ):
+        image_path: str,
+        output_dir: str
+    ) -> List[str]:
         """
-        Detect and crop chemical structures.
+        Segment chemical structures from a page image.
+
+        Parameters
+        ----------
+        image_path : str
+            Path to rendered page image.
+
+        output_dir : str
+            Directory where cropped structures will be saved.
+
+        Returns
+        -------
+        List[str]
+            Paths to cropped structure images.
         """
 
-        page_image = Path(page_image)
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
 
-        image = cv2.imread(str(page_image))
-
-        if image is None:
-            raise FileNotFoundError(
-                f"Unable to read image:\n{page_image}"
-            )
-
-        crop_folder = output_directory / CROP_FOLDER
-        crop_folder.mkdir(parents=True, exist_ok=True)
-
-        detections = []
-
-        results = self.model.predict(
-            source=image,
-            conf=YOLO_CONFIDENCE_THRESHOLD,
-            verbose=False
+        structures = segment_chemical_structures_from_file(
+            image_path,
+            expand=True
         )
 
-        image_counter = 1
+        saved_images = []
 
-        for result in results:
+        stem = Path(image_path).stem
 
-            if result.boxes is None:
-                continue
+        for idx, structure in enumerate(structures):
 
-            for box in result.boxes:
+            save_path = output_dir / f"{stem}_structure_{idx+1}.png"
 
-                x1, y1, x2, y2 = map(
-                    int,
-                    box.xyxy[0].tolist()
-                )
+            cv2.imwrite(str(save_path), structure)
 
-                confidence = float(box.conf[0])
+            saved_images.append(str(save_path))
 
-                crop = image[y1:y2, x1:x2]
-
-                filename = IMAGE_NAME_TEMPLATE.format(
-                    image_counter
-                )
-
-                crop_path = crop_folder / filename
-
-                cv2.imwrite(
-                    str(crop_path),
-                    crop
-                )
-
-                detections.append(
-                    Detection(
-                        image_id=image_counter,
-                        image_path=crop_path,
-                        image_type="chemical_structure",
-                        is_formula=True,
-                        confidence=confidence,
-                        bbox=(x1, y1, x2, y2)
-                    )
-                )
-
-                image_counter += 1
-
-        return detections
+        return saved_images

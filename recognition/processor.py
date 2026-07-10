@@ -5,17 +5,16 @@ Recognition processor for the DECIMER pipeline.
 
 Pipeline
 --------
-Image
-    ↓
-Recognizer
-    ↓
-Validator
-    ↓
-Renderer
+Cleaned Image
+        ↓
+Recognition
+        ↓
+Validation
+        ↓
+Redraw
 """
 
 from pathlib import Path
-from typing import Dict
 
 from .recognizer import DecimerRecognizer
 from .validator import SmilesValidator
@@ -27,23 +26,19 @@ class ImageProcessor:
     def __init__(self):
 
         self.recognizer = DecimerRecognizer()
-
         self.validator = SmilesValidator()
-
         self.renderer = MoleculeRenderer()
 
-    # ---------------------------------------------------------
+    # ------------------------------------------------------------------
 
     def process_image(
         self,
         image_path: str | Path,
-        cleaned_path: str | Path,
         redraw_png: str | Path,
         redraw_svg: str | Path,
-    ) -> Dict:
+    ):
 
         image_path = Path(image_path)
-        cleaned_path = Path(cleaned_path)
         redraw_png = Path(redraw_png)
         redraw_svg = Path(redraw_svg)
 
@@ -60,6 +55,8 @@ class ImageProcessor:
                 "success": False,
 
                 "reason": "No SMILES recognized",
+
+                "smiles": None,
 
                 **recognition,
 
@@ -90,7 +87,7 @@ class ImageProcessor:
         smiles = validation["canonical_smiles"]
 
         # ---------------------------------------------------------
-        # Redraw
+        # Redraw molecule
         # ---------------------------------------------------------
 
         redraw = self.renderer.render(
@@ -100,24 +97,24 @@ class ImageProcessor:
         )
 
         # ---------------------------------------------------------
-        # Return
+        # Final result
         # ---------------------------------------------------------
 
         return {
 
             "success": True,
 
+            "reason": "",
+
             "smiles": smiles,
 
-            "trust": recognition["trust"],
-
-            "votes": recognition["votes"],
-
-            "total_predictions": recognition["total"],
+            "confidence": recognition["confidence"],
 
             "agreement": recognition["agreement"],
 
-            "confidence": recognition["confidence"],
+            "votes": recognition["votes"],
+
+            "trust": recognition["trust"],
 
             "pubchem": recognition["pubchem"],
 
@@ -131,10 +128,6 @@ class ImageProcessor:
 
             "atom_count": validation["atom_count"],
 
-            "original_image": str(image_path),
-
-            "cleaned_image": str(cleaned_path),
-
             "redraw_png": redraw["png"],
 
             "redraw_svg": redraw["svg"],
@@ -143,19 +136,18 @@ class ImageProcessor:
 
         }
 
-    # ---------------------------------------------------------
+    # ------------------------------------------------------------------
 
     def process_folder(
         self,
-        folder: str | Path,
-        redraw_png_folder: str | Path,
-        redraw_svg_folder: str | Path,
+        folder,
+        redraw_png_folder,
+        redraw_svg_folder,
     ):
 
         folder = Path(folder)
 
         redraw_png_folder = Path(redraw_png_folder)
-
         redraw_svg_folder = Path(redraw_svg_folder)
 
         extensions = {
@@ -171,16 +163,11 @@ class ImageProcessor:
 
         for image in sorted(folder.iterdir()):
 
-            if (
-                image.is_file()
-                and image.suffix.lower() in extensions
-            ):
+            if image.is_file() and image.suffix.lower() in extensions:
 
                 result = self.process_image(
 
                     image,
-
-                    "",
 
                     redraw_png_folder / f"{image.stem}.png",
 
@@ -192,19 +179,17 @@ class ImageProcessor:
 
         return results
 
-    # ---------------------------------------------------------
+    # ------------------------------------------------------------------
 
     def __call__(
         self,
         image_path,
-        cleaned_path,
         redraw_png,
         redraw_svg,
     ):
 
         return self.process_image(
             image_path,
-            cleaned_path,
             redraw_png,
             redraw_svg,
         )

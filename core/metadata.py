@@ -3,13 +3,8 @@ metadata.py
 
 Metadata Manager
 
-Responsibilities
-----------------
-1. Store image-level metadata.
-2. Record pipeline errors.
-3. Export metadata to CSV.
-
-Author: Abhiram
+Stores metadata for every chemical structure processed by the
+DECIMER pipeline.
 """
 
 from pathlib import Path
@@ -19,16 +14,11 @@ from core.config import METADATA_COLUMNS
 
 
 class MetadataManager:
-    """
-    Manages metadata for every detected chemical structure.
-    """
 
     def __init__(self):
         self.records = []
 
-    # ---------------------------------------------------------
-    # Public Methods
-    # ---------------------------------------------------------
+    # ------------------------------------------------------------------
 
     def add_entry(
         self,
@@ -42,10 +32,18 @@ class MetadataManager:
         is_formula,
         smiles,
         processing_status,
-        error_message=""
+        error_message="",
+        confidence=None,
+        agreement=None,
+        votes=None,
+        trust=None,
+        pubchem=None,
+        needs_review=None,
+        formula=None,
+        molecular_weight=None,
     ):
         """
-        Add one processed image to the metadata.
+        Add one processed chemical structure.
         """
 
         self.records.append({
@@ -70,19 +68,35 @@ class MetadataManager:
 
             "processing_status": processing_status,
 
-            "error_message": error_message
+            "error_message": error_message,
+
+            "confidence": confidence,
+
+            "agreement": agreement,
+
+            "votes": votes,
+
+            "trust": trust,
+
+            "pubchem": pubchem,
+
+            "needs_review": needs_review,
+
+            "formula": formula,
+
+            "molecular_weight": molecular_weight,
 
         })
 
-    # ---------------------------------------------------------
+    # ------------------------------------------------------------------
 
     def add_pipeline_error(
         self,
         document_id,
-        error_message
+        error_message,
     ):
         """
-        Record a pipeline-level failure.
+        Store a pipeline-level error.
         """
 
         self.records.append({
@@ -107,15 +121,31 @@ class MetadataManager:
 
             "processing_status": "FAILED",
 
-            "error_message": error_message
+            "error_message": error_message,
+
+            "confidence": None,
+
+            "agreement": None,
+
+            "votes": None,
+
+            "trust": None,
+
+            "pubchem": None,
+
+            "needs_review": None,
+
+            "formula": None,
+
+            "molecular_weight": None,
 
         })
 
-    # ---------------------------------------------------------
+    # ------------------------------------------------------------------
 
     def export(
         self,
-        csv_path
+        csv_path,
     ):
         """
         Export metadata to CSV.
@@ -125,45 +155,32 @@ class MetadataManager:
 
         csv_path.parent.mkdir(
             parents=True,
-            exist_ok=True
+            exist_ok=True,
         )
 
         df = pd.DataFrame(
-            self.records,
-            columns=METADATA_COLUMNS
+            self.records
         )
 
         df.to_csv(
             csv_path,
-            index=False
+            index=False,
         )
 
-    # ---------------------------------------------------------
+    # ------------------------------------------------------------------
 
     def clear(self):
-        """
-        Remove all stored metadata.
-        """
-
         self.records.clear()
 
-    # ---------------------------------------------------------
+    # ------------------------------------------------------------------
 
     def get_dataframe(self):
-        """
-        Return metadata as a pandas DataFrame.
-        """
 
         return pd.DataFrame(
-            self.records,
-            columns=METADATA_COLUMNS
+            self.records
         )
 
-    # ---------------------------------------------------------
+    # ------------------------------------------------------------------
 
     def __len__(self):
-        """
-        Number of metadata records.
-        """
-
         return len(self.records)
