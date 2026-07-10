@@ -143,17 +143,17 @@ class Pipeline:
             }
 
         except Exception as e:
-
+            import traceback
+            traceback.print_exc()
             self.inventory.update_status(
                 document_id,
                 "FAILED",
             )
 
             self.metadata.add_pipeline_error(
-                document_id=document_id,
-                error_message=str(e),
+            document_id=document_id,
+            error_message=str(e),
             )
-
             self.metadata.export(metadata_csv)
 
             return {
