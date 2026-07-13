@@ -108,8 +108,8 @@ class Pipeline:
                     )
 
                     result = self.processor.process_image(
-                        image_path=cleaned_path,
-                        cleaned_path=cleaned_path,
+                        image_path=cleaned_path / crop_path.name,
+                        cleaned_path=cleaned_path / crop_path.name,
                         redraw_png=redraw_png,
                         redraw_svg=redraw_svg,
                     )
