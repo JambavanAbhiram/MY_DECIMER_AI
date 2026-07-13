@@ -29,28 +29,31 @@ class ImageProcessor:
 
     def process_image(
         self,
-        image_path: str | Path | None = None,
-        redraw_png: str | Path | None = None,
-        redraw_svg: str | Path | None = None,
-        cleaned_path: str | Path | None = None,
+        image_path: str | Path,
+        redraw_png: str | Path,
+        redraw_svg: str | Path,
     ):
-        # Allow cleaned_path as an alias for image_path
-        if cleaned_path is not None:
-            image_path = cleaned_path
-
-        if image_path is None:
-            raise ValueError("Either image_path or cleaned_path must be provided.")
-
-        if redraw_png is None or redraw_svg is None:
-            raise ValueError("redraw_png and redraw_svg must be provided.")
-
         image_path = Path(image_path)
         redraw_png = Path(redraw_png)
         redraw_svg = Path(redraw_svg)
 
+        print("=" * 70)
+        print(f"Processing Image : {image_path.name}")
+        print(f"Image Path       : {image_path}")
+        print("=" * 70)
+
+        # ---------------------------------------------------------
+        # Recognition
+        # ---------------------------------------------------------
+
+        print("[1/4] Starting DECIMER recognition...")
+
         recognition = self.recognizer.predict(image_path)
 
+        print("[1/4] DECIMER recognition completed.")
+
         if recognition["smiles"] is None:
+            print("[FAILED] No SMILES recognized.\n")
             return {
                 "success": False,
                 "reason": "No SMILES recognized",
@@ -58,9 +61,23 @@ class ImageProcessor:
                 **recognition,
             }
 
-        validation = self.validator.validate(recognition["smiles"])
+        print(f"Predicted SMILES length : {len(recognition['smiles'])}")
+        print(f"Confidence              : {recognition['confidence']}")
+
+        # ---------------------------------------------------------
+        # Validation
+        # ---------------------------------------------------------
+
+        print("[2/4] Validating SMILES...")
+
+        validation = self.validator.validate(
+            recognition["smiles"]
+        )
+
+        print("[2/4] Validation completed.")
 
         if not validation["valid"]:
+            print("[FAILED] Invalid SMILES.\n")
             return {
                 "success": False,
                 "reason": "Invalid SMILES",
@@ -70,11 +87,29 @@ class ImageProcessor:
 
         smiles = validation["canonical_smiles"]
 
+        print("Canonical SMILES generated.")
+        print(f"Formula          : {validation['formula']}")
+        print(f"Molecular Weight : {validation['molecular_weight']}")
+
+        # ---------------------------------------------------------
+        # Redraw
+        # ---------------------------------------------------------
+
+        print("[3/4] Rendering molecule...")
+
         redraw = self.renderer.render(
             smiles,
             redraw_png,
             redraw_svg,
         )
+
+        print("[3/4] Rendering completed.")
+
+        # ---------------------------------------------------------
+        # Final
+        # ---------------------------------------------------------
+
+        print("[4/4] Image processing completed successfully.\n")
 
         return {
             "success": True,
@@ -134,7 +169,7 @@ class ImageProcessor:
         redraw_svg,
     ):
         return self.process_image(
-            image_path=image_path,
-            redraw_png=redraw_png,
-            redraw_svg=redraw_svg,
+            image_path,
+            redraw_png,
+            redraw_svg,
         )
