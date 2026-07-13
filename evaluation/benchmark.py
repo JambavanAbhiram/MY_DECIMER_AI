@@ -259,3 +259,12 @@ class Benchmark:
         print(self.report.summary())
 
         return self.report.summary_dataframe()
+    
+if __name__ == "__main__":
+
+    benchmark = Benchmark(
+        inventory_csv="data/master_inventory.csv",
+        metadata_csv="data/master_metadata.csv",
+    )
+
+    benchmark.run()
