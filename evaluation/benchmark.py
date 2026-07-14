@@ -262,9 +262,36 @@ class Benchmark:
     
 if __name__ == "__main__":
 
+    from pathlib import Path
+
+    print("=" * 60)
+    print("DECIMER Evaluation Benchmark")
+    print("=" * 60)
+
+    inventory_csv = input(
+        "\nEnter Inventory CSV path:\n> "
+    ).strip().strip('"')
+
+    metadata_csv = input(
+        "\nEnter Metadata CSV path:\n> "
+    ).strip().strip('"')
+
+    inventory_csv = Path(inventory_csv)
+    metadata_csv = Path(metadata_csv)
+
+    if not inventory_csv.exists():
+        raise FileNotFoundError(
+            f"Inventory CSV not found:\n{inventory_csv}"
+        )
+
+    if not metadata_csv.exists():
+        raise FileNotFoundError(
+            f"Metadata CSV not found:\n{metadata_csv}"
+        )
+
     benchmark = Benchmark(
-        inventory_csv="data/master_inventory.csv",
-        metadata_csv="data/master_metadata.csv",
+        inventory_csv=inventory_csv,
+        metadata_csv=metadata_csv,
     )
 
     benchmark.run()

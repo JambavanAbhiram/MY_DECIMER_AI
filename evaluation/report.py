@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Dict
+from typing import Any, Dict
 
 import pandas as pd
 
@@ -22,7 +22,7 @@ class ReportGenerator:
 
     def __init__(self):
 
-        self.sections: Dict[str, Dict] = {}
+        self.sections: Dict[str, Any] = {}
 
     # ---------------------------------------------------------
     # Add Section
@@ -31,14 +31,15 @@ class ReportGenerator:
     def add_section(
         self,
         name: str,
-        results: Dict,
+        results: Any,
     ) -> None:
         """
         Add evaluator results.
 
-        Example
-        -------
-        add_section("inventory", inventory_results)
+        Supports:
+        - dict
+        - list of dicts
+        - DataFrame
         """
 
         self.sections[name] = results
@@ -53,13 +54,63 @@ class ReportGenerator:
 
         for section, metrics in self.sections.items():
 
-            for metric, value in metrics.items():
+            # -----------------------------
+            # Dictionary
+            # -----------------------------
+            if isinstance(metrics, dict):
+
+                for metric, value in metrics.items():
+
+                    rows.append(
+                        {
+                            "section": section,
+                            "metric": metric,
+                            "value": value,
+                        }
+                    )
+
+            # -----------------------------
+            # List (usually list of dicts)
+            # -----------------------------
+            elif isinstance(metrics, list):
+
+                for item in metrics:
+
+                    if isinstance(item, dict):
+
+                        row = {"section": section}
+                        row.update(item)
+                        rows.append(row)
+
+                    else:
+
+                        rows.append(
+                            {
+                                "section": section,
+                                "metric": "",
+                                "value": item,
+                            }
+                        )
+
+            # -----------------------------
+            # DataFrame
+            # -----------------------------
+            elif isinstance(metrics, pd.DataFrame):
+
+                df = metrics.copy()
+                df.insert(0, "section", section)
+                rows.extend(df.to_dict(orient="records"))
+
+            # -----------------------------
+            # Anything else
+            # -----------------------------
+            else:
 
                 rows.append(
                     {
                         "section": section,
-                        "metric": metric,
-                        "value": value,
+                        "metric": "",
+                        "value": metrics,
                     }
                 )
 
@@ -104,6 +155,7 @@ class ReportGenerator:
                 self.sections,
                 fp,
                 indent=4,
+                default=str,
             )
 
         return output
@@ -127,10 +179,29 @@ class ReportGenerator:
             lines.append(section.upper())
             lines.append("-" * 60)
 
-            for metric, value in metrics.items():
+            # Dictionary
+            if isinstance(metrics, dict):
 
-                lines.append(
-                    f"{metric:<35}{value}"
-                )
+                for metric, value in metrics.items():
+
+                    lines.append(
+                        f"{metric:<35}{value}"
+                    )
+
+            # List
+            elif isinstance(metrics, list):
+
+                for item in metrics:
+
+                    lines.append(str(item))
+
+            # DataFrame
+            elif isinstance(metrics, pd.DataFrame):
+
+                lines.append(metrics.to_string(index=False))
+
+            else:
+
+                lines.append(str(metrics))
 
         return "\n".join(lines)
