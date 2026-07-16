@@ -28,6 +28,7 @@ class Pipeline:
         self.processor = ImageProcessor()
         self.metadata = MetadataManager()
 
+        self.benchmark_image_counter = 1
     # ------------------------------------------------------------------
 
     def run(self, input_data):
@@ -113,7 +114,15 @@ class Pipeline:
                         redraw_png=redraw_png,
                         redraw_svg=redraw_svg,
                     )
+                    # -------------------------------------------------------
+                    # Generate benchmark-compatible image ID
+                    # -------------------------------------------------------
 
+                    benchmark_image_id = (
+                        f"IMG{self.benchmark_image_counter:05d}"
+                    )
+
+                    self.benchmark_image_counter += 1
                     # ----------------------------
                     # Metadata
                     # ----------------------------
@@ -122,7 +131,7 @@ class Pipeline:
                         document_id=document_id,
                         pdf_name=pdf_path.name,
                         page_number=page.page_number,
-                        image_id=f"{page.page_number}_{image_index}",
+                        image_id=benchmark_image_id,
                         image_path=str(crop_path),
                         clean_image_path=str(cleaned_path),
                         image_type="chemical_structure",
@@ -138,6 +147,12 @@ class Pipeline:
                             if result.get("success")
                             else result.get("reason", "")
                         ),
+                        confidence=result.get("confidence"),
+                        agreement=result.get("agreement"),
+                        votes=result.get("votes"),
+                        trust=result.get("trust"),
+                        pubchem=result.get("pubchem"),
+                        needs_review=result.get("needs_review"),
                     )
 
             self.inventory.update_status(

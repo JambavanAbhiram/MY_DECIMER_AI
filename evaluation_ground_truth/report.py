@@ -18,39 +18,41 @@ from evaluation_ground_truth.config import (
 def write_report(summary, details, output_dir):
     """
     Generate all evaluation reports.
-
-    Parameters
-    ----------
-    summary : dict
-        Summary statistics.
-    details : pandas.DataFrame
-        Row-wise evaluation results.
-    output_dir : Path
-        Output directory.
     """
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # ----------------------------------------------------------
+    # ==========================================================
     # Save Detailed CSV
-    # ----------------------------------------------------------
+    # ==========================================================
 
     details_path = output_dir / DETAILS_CSV
     details.to_csv(details_path, index=False)
 
-    # ----------------------------------------------------------
+    # ==========================================================
     # Save Summary JSON
-    # ----------------------------------------------------------
+    # ==========================================================
 
     summary_path = output_dir / SUMMARY_JSON
 
     with open(summary_path, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=4)
 
-    # ----------------------------------------------------------
-    # Prepare Failure Table
-    # ----------------------------------------------------------
+    # ==========================================================
+    # Status Summary
+    # ==========================================================
+
+    status_counts = (
+        details["evaluation_status"]
+        .value_counts()
+        .to_frame("Count")
+        .to_html()
+    )
+
+    # ==========================================================
+    # Failed Predictions
+    # ==========================================================
 
     failures = details[
         details["evaluation_status"] != "Correct"
@@ -64,9 +66,9 @@ def write_report(summary, details, output_dir):
             escape=False
         )
 
-    # ----------------------------------------------------------
+    # ==========================================================
     # HTML Report
-    # ----------------------------------------------------------
+    # ==========================================================
 
     html = f"""
 <!DOCTYPE html>
@@ -81,7 +83,7 @@ def write_report(summary, details, output_dir):
 body {{
     font-family: Arial, Helvetica, sans-serif;
     margin: 40px;
-    background-color: #fafafa;
+    background: #fafafa;
 }}
 
 h1 {{
@@ -90,6 +92,7 @@ h1 {{
 
 h2 {{
     margin-top: 40px;
+    color: #1f4e79;
 }}
 
 table {{
@@ -117,6 +120,12 @@ tr:nth-child(even) {{
     width: 45%;
 }}
 
+.footer {{
+    margin-top: 40px;
+    color: gray;
+    font-size: 13px;
+}}
+
 </style>
 
 </head>
@@ -135,7 +144,9 @@ tr:nth-child(even) {{
 
 <tr><td>Recognized</td><td>{summary["recognized"]}</td></tr>
 
-<tr><td>Missing</td><td>{summary["missing"]}</td></tr>
+<tr><td>Recognition Failed</td><td>{summary.get("recognition_failed",0)}</td></tr>
+
+<tr><td>Missing Predictions</td><td>{summary["missing"]}</td></tr>
 
 <tr><td>Invalid SMILES</td><td>{summary["invalid_smiles"]}</td></tr>
 
@@ -147,13 +158,21 @@ tr:nth-child(even) {{
 
 <tr><td>Exact Accuracy (%)</td><td>{summary["exact_accuracy"]}</td></tr>
 
-<tr><td>Overall Accuracy (%)</td><td>{summary["overall_accuracy"]}</td></tr>
+<tr><td>Canonical Accuracy (%)</td><td>{summary["overall_accuracy"]}</td></tr>
 
 </table>
+
+<h2>Evaluation Status Distribution</h2>
+
+{status_counts}
 
 <h2>Failed Predictions</h2>
 
 {failure_table}
+
+<div class="footer">
+Generated automatically by the DECIMER Ground Truth Evaluation package.
+</div>
 
 </body>
 
