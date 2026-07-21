@@ -1,3 +1,9 @@
+"""
+cleaner.py
+
+Image preprocessing module for DECIMER recognition.
+"""
+
 from pathlib import Path
 
 import cv2
@@ -6,59 +12,90 @@ import numpy as np
 
 class ImageCleaner:
     """
-    Cleans segmented chemical structure images before DECIMER recognition.
+    Cleans segmented chemical structure images before
+    DECIMER recognition.
     """
 
     def __init__(
         self,
-        output_dir: str | Path,
         resize_width: int = 1024,
         padding: int = 20,
     ):
-        self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-
         self.resize_width = resize_width
         self.padding = padding
 
-    def clean_image(self, image_path: str | Path) -> Path:
+    # -------------------------------------------------------------
+
+    def process(
+        self,
+        input_path,
+        output_path,
+    ):
         """
-        Clean a single cropped chemical structure image.
+        Clean a cropped chemical structure image.
 
         Parameters
         ----------
-        image_path : str | Path
+        input_path : str | Path
+            Cropped image.
 
-        Returns
-        -------
-        Path
-            Path to cleaned image.
+        output_path : str | Path
+            Destination for cleaned image.
         """
 
-        image_path = Path(image_path)
+        input_path = Path(input_path)
+        output_path = Path(output_path)
 
-        image = cv2.imread(str(image_path))
+        image = cv2.imread(str(input_path))
 
         if image is None:
-            raise FileNotFoundError(f"Cannot load image: {image_path}")
+            raise FileNotFoundError(
+                f"Unable to load image: {input_path}"
+            )
 
         cleaned = self._preprocess(image)
 
-        output_path = self.output_dir / image_path.name
+        output_path.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
 
-        cv2.imwrite(str(output_path), cleaned)
+        success = cv2.imwrite(
+            str(output_path),
+            cleaned,
+        )
+
+        if not success:
+            raise RuntimeError(
+                f"Failed to save cleaned image: {output_path}"
+            )
 
         return output_path
 
-    def _preprocess(self, image: np.ndarray) -> np.ndarray:
+    # -------------------------------------------------------------
 
-        # grayscale
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    def _preprocess(
+        self,
+        image: np.ndarray,
+    ) -> np.ndarray:
+        """
+        Basic preprocessing pipeline.
+        """
 
-        # denoise
-        gray = cv2.GaussianBlur(gray, (3, 3), 0)
+        # Convert to grayscale
+        gray = cv2.cvtColor(
+            image,
+            cv2.COLOR_BGR2GRAY,
+        )
 
-        # threshold
+        # Denoise
+        gray = cv2.GaussianBlur(
+            gray,
+            (3, 3),
+            0,
+        )
+
+        # Otsu threshold
         binary = cv2.threshold(
             gray,
             0,
@@ -66,25 +103,32 @@ class ImageCleaner:
             cv2.THRESH_BINARY + cv2.THRESH_OTSU,
         )[1]
 
-        # invert if necessary
+        # Ensure black structure on white background
         if np.mean(binary) < 127:
             binary = cv2.bitwise_not(binary)
 
-        # crop white border
-        coords = cv2.findNonZero(255 - binary)
+        # Crop surrounding whitespace
+        coords = cv2.findNonZero(
+            255 - binary
+        )
 
         if coords is not None:
+
             x, y, w, h = cv2.boundingRect(coords)
 
             binary = binary[
-                max(0, y - self.padding): y + h + self.padding,
-                max(0, x - self.padding): x + w + self.padding,
+                max(0, y - self.padding):
+                min(binary.shape[0], y + h + self.padding),
+
+                max(0, x - self.padding):
+                min(binary.shape[1], x + w + self.padding),
             ]
 
-        # resize
+        # Resize if needed
         h, w = binary.shape
 
         if w > self.resize_width:
+
             scale = self.resize_width / w
 
             binary = cv2.resize(
