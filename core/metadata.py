@@ -14,10 +14,18 @@ from core.config import METADATA_COLUMNS
 
 
 class MetadataManager:
+    """
+    Stores metadata for every processed chemical structure.
+
+    Records are accumulated in memory and exported to CSV
+    at the end of pipeline execution.
+    """
 
     def __init__(self):
         self.records = []
 
+    # ------------------------------------------------------------------
+    # Structure Metadata
     # ------------------------------------------------------------------
 
     def add_entry(
@@ -41,9 +49,14 @@ class MetadataManager:
         needs_review=None,
         formula=None,
         molecular_weight=None,
+        engine=None,
+        canonical_smiles=None,
+        heavy_atoms=None,
+        atom_count=None,
+        valid=None,
     ):
         """
-        Add one processed chemical structure.
+        Store metadata for one processed image.
         """
 
         self.records.append({
@@ -64,11 +77,19 @@ class MetadataManager:
 
             "is_formula": is_formula,
 
+            "engine": engine,
+
             "smiles": smiles,
 
-            "processing_status": processing_status,
+            "canonical_smiles": canonical_smiles,
 
-            "error_message": error_message,
+            "formula": formula,
+
+            "molecular_weight": molecular_weight,
+
+            "heavy_atoms": heavy_atoms,
+
+            "atom_count": atom_count,
 
             "confidence": confidence,
 
@@ -80,14 +101,18 @@ class MetadataManager:
 
             "pubchem": pubchem,
 
+            "valid": valid,
+
             "needs_review": needs_review,
 
-            "formula": formula,
+            "processing_status": processing_status,
 
-            "molecular_weight": molecular_weight,
+            "error_message": error_message,
 
         })
 
+    # ------------------------------------------------------------------
+    # Pipeline Errors
     # ------------------------------------------------------------------
 
     def add_pipeline_error(
@@ -96,7 +121,7 @@ class MetadataManager:
         error_message,
     ):
         """
-        Store a pipeline-level error.
+        Store a pipeline-level failure.
         """
 
         self.records.append({
@@ -117,11 +142,19 @@ class MetadataManager:
 
             "is_formula": "",
 
-            "smiles": "",
+            "engine": None,
 
-            "processing_status": "FAILED",
+            "smiles": None,
 
-            "error_message": error_message,
+            "canonical_smiles": None,
+
+            "formula": None,
+
+            "molecular_weight": None,
+
+            "heavy_atoms": None,
+
+            "atom_count": None,
 
             "confidence": None,
 
@@ -133,14 +166,18 @@ class MetadataManager:
 
             "pubchem": None,
 
+            "valid": False,
+
             "needs_review": None,
 
-            "formula": None,
+            "processing_status": "FAILED",
 
-            "molecular_weight": None,
+            "error_message": error_message,
 
         })
 
+    # ------------------------------------------------------------------
+    # Export
     # ------------------------------------------------------------------
 
     def export(
@@ -148,7 +185,7 @@ class MetadataManager:
         csv_path,
     ):
         """
-        Export metadata to CSV.
+        Export metadata as CSV.
         """
 
         csv_path = Path(csv_path)
@@ -159,7 +196,8 @@ class MetadataManager:
         )
 
         df = pd.DataFrame(
-            self.records
+            self.records,
+            columns=METADATA_COLUMNS,
         )
 
         df.to_csv(
@@ -168,19 +206,29 @@ class MetadataManager:
         )
 
     # ------------------------------------------------------------------
+    # Utilities
+    # ------------------------------------------------------------------
 
     def clear(self):
+        """Remove all stored metadata."""
         self.records.clear()
 
     # ------------------------------------------------------------------
 
     def get_dataframe(self):
+        """Return metadata as a pandas DataFrame."""
 
         return pd.DataFrame(
-            self.records
+            self.records,
+            columns=METADATA_COLUMNS,
         )
 
     # ------------------------------------------------------------------
 
     def __len__(self):
         return len(self.records)
+
+    # ------------------------------------------------------------------
+
+    def __iter__(self):
+        return iter(self.records)

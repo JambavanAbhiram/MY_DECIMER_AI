@@ -1,83 +1,72 @@
 """
-evaluation/config.py
+config.py
 
-Configuration for the pipeline evaluation framework.
-
-This module contains settings used exclusively by the evaluation
-package and should not modify the behavior of the processing pipeline.
+Configuration for the DECIMER Evaluation Framework.
 """
 
 from pathlib import Path
 
-# ---------------------------------------------------------------------
-# Directories
-# ---------------------------------------------------------------------
+# =========================================================
+# Output Configuration
+# =========================================================
 
-# Root directory where evaluation outputs are stored
-EVALUATION_DIR = Path("evaluation_results")
+DEFAULT_OUTPUT_DIR = Path("evaluation_results")
 
-# Reports
-REPORTS_DIR = EVALUATION_DIR / "reports"
+SUMMARY_CSV = "evaluation_summary.csv"
 
-# Generated plots
-PLOTS_DIR = EVALUATION_DIR / "plots"
+SUMMARY_JSON = "evaluation_summary.json"
 
-# Log files
-LOGS_DIR = EVALUATION_DIR / "logs"
+DETAILS_CSV = "evaluation_details.csv"
 
-# Failed images
-FAILED_DIR = EVALUATION_DIR / "failed_images"
+FAILURES_CSV = "evaluation_failures.csv"
 
-# ---------------------------------------------------------------------
+HTML_REPORT = "evaluation_report.html"
+
+# =========================================================
+# Image Validation
+# =========================================================
+
+VALID_IMAGE_EXTENSIONS = {
+    ".png",
+    ".jpg",
+    ".jpeg",
+}
+
+BLANK_IMAGE_THRESHOLD = 2.0
+
+# =========================================================
+# Ground Truth Evaluation
+# =========================================================
+
+GROUND_TRUTH_IMAGE_ID = "image_id"
+
+GROUND_TRUTH_SMILES = "ground_truth_smiles"
+
+# =========================================================
+# Metadata Columns
+# =========================================================
+
+INVENTORY_REQUIRED_COLUMNS = [
+    "document_id",
+    "pdf_name",
+    "pdf_path",
+    "processed",
+]
+
+METADATA_REQUIRED_COLUMNS = [
+    "document_id",
+    "page_number",
+    "image_id",
+    "image_path",
+]
+
+RECOGNITION_REQUIRED_COLUMNS = [
+    "image_id",
+    "smiles",
+]
+
+# =========================================================
 # Runtime
-# ---------------------------------------------------------------------
+# =========================================================
 
-SAVE_RUNTIME_LOG = True
-
-# ---------------------------------------------------------------------
-# Resource Monitoring
-# ---------------------------------------------------------------------
-
-MONITOR_CPU = True
-MONITOR_RAM = True
-MONITOR_GPU = True
-
-# ---------------------------------------------------------------------
-# Detection Evaluation
-# ---------------------------------------------------------------------
-
-IOU_THRESHOLD = 0.50
-
-# ---------------------------------------------------------------------
-# Recognition Evaluation
-# ---------------------------------------------------------------------
-
-SMILES_MATCH_MODE = "canonical"
-
-# ---------------------------------------------------------------------
-# Reporting
-# ---------------------------------------------------------------------
-
-SAVE_CSV = True
-SAVE_JSON = True
-GENERATE_PLOTS = True
-GENERATE_SUMMARY = True
-
-# ---------------------------------------------------------------------
-# Logging
-# ---------------------------------------------------------------------
-
-VERBOSE = True
-
-# ---------------------------------------------------------------------
-# Create directories automatically
-# ---------------------------------------------------------------------
-
-for directory in (
-    EVALUATION_DIR,
-    REPORTS_DIR,
-    PLOTS_DIR,
-    LOGS_DIR,
-    FAILED_DIR,
-):
-    directory.mkdir(parents=True, exist_ok=True)
+DECIMAL_PRECISION = 2
