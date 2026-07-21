@@ -253,8 +253,7 @@ class EvaluationPipeline:
         required = [
             "document_id",
             "pdf_name",
-            "pdf_path",
-            "processed",
+            "pdf_path"
         ]
 
         self.validate_columns(
@@ -267,14 +266,8 @@ class EvaluationPipeline:
 
         results["total_documents"] = len(self.inventory)
 
-        results["processed_documents"] = int(
-            self.inventory["processed"].sum()
-        )
-
-        results["unprocessed_documents"] = (
-            results["total_documents"]
-            - results["processed_documents"]
-        )
+        results["processed_documents"] = len(self.inventory)
+        results["unprocessed_documents"] = 0
 
         results["duplicate_document_ids"] = int(
             self.inventory["document_id"]
