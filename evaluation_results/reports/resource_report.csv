@@ -1,8 +1,0 @@
-metric,value
-cpu_average_percent,11.85
-cpu_peak_percent,21.8
-ram_average_mb,93.58
-ram_peak_mb,94.48
-gpu_average_percent,0.0
-gpu_peak_percent,0.0
-gpu_peak_memory_mb,0.0
