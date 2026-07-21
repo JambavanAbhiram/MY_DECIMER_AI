@@ -1,10 +1,15 @@
-from __future__ import annotations
+"""
+recognition/validator.py
 
-from typing import Dict, Optional
+SMILES validation utilities.
+"""
+
+from __future__ import annotations
 
 from rdkit import Chem
 from rdkit.Chem import Descriptors
 from rdkit.Chem import rdMolDescriptors
+from rdkit.Chem.MolStandardize import rdMolStandardize
 
 
 class SmilesValidator:
@@ -12,15 +17,18 @@ class SmilesValidator:
     Validates and standardizes SMILES strings.
     """
 
+    def __init__(self):
+
+        self.fragment_chooser = (
+            rdMolStandardize.LargestFragmentChooser()
+        )
+
     # ---------------------------------------------------------
 
     @staticmethod
-    def is_valid(smiles: Optional[str]) -> bool:
-        """
-        Returns True if RDKit can parse the SMILES.
-        """
+    def is_valid(smiles: str | None) -> bool:
 
-        if smiles is None:
+        if not smiles:
             return False
 
         try:
@@ -31,13 +39,38 @@ class SmilesValidator:
 
     # ---------------------------------------------------------
 
-    @staticmethod
-    def canonicalize(smiles: str) -> Optional[str]:
-        """
-        Convert SMILES into canonical representation.
-        """
+    def largest_fragment(
+        self,
+        smiles: str,
+    ) -> str | None:
 
         try:
+
+            mol = Chem.MolFromSmiles(smiles)
+
+            if mol is None:
+                return None
+
+            mol = self.fragment_chooser.choose(mol)
+
+            return Chem.MolToSmiles(
+                mol,
+                canonical=True,
+            )
+
+        except Exception:
+
+            return None
+
+    # ---------------------------------------------------------
+
+    @staticmethod
+    def canonicalize(
+        smiles: str,
+    ) -> str | None:
+
+        try:
+
             mol = Chem.MolFromSmiles(smiles)
 
             if mol is None:
@@ -49,57 +82,15 @@ class SmilesValidator:
             )
 
         except Exception:
-            return None
-
-    # ---------------------------------------------------------
-
-    @staticmethod
-    def largest_fragment(smiles: str) -> Optional[str]:
-        """
-        Keep only the largest fragment.
-
-        Example
-
-        Na.Cl.CCO
-
-        ↓
-
-        CCO
-        """
-
-        try:
-
-            mol = Chem.MolFromSmiles(smiles)
-
-            if mol is None:
-                return None
-
-            frags = Chem.GetMolFrags(
-                mol,
-                asMols=True,
-            )
-
-            if len(frags) == 0:
-                return None
-
-            largest = max(
-                frags,
-                key=lambda x: x.GetNumAtoms(),
-            )
-
-            return Chem.MolToSmiles(
-                largest,
-                canonical=True,
-            )
-
-        except Exception:
 
             return None
 
     # ---------------------------------------------------------
 
     @staticmethod
-    def molecular_formula(smiles: str) -> Optional[str]:
+    def molecular_formula(
+        smiles: str,
+    ) -> str | None:
 
         mol = Chem.MolFromSmiles(smiles)
 
@@ -113,7 +104,9 @@ class SmilesValidator:
     # ---------------------------------------------------------
 
     @staticmethod
-    def molecular_weight(smiles: str) -> Optional[float]:
+    def molecular_weight(
+        smiles: str,
+    ) -> float | None:
 
         mol = Chem.MolFromSmiles(smiles)
 
@@ -128,7 +121,9 @@ class SmilesValidator:
     # ---------------------------------------------------------
 
     @staticmethod
-    def heavy_atoms(smiles: str) -> Optional[int]:
+    def heavy_atoms(
+        smiles: str,
+    ) -> int | None:
 
         mol = Chem.MolFromSmiles(smiles)
 
@@ -140,7 +135,9 @@ class SmilesValidator:
     # ---------------------------------------------------------
 
     @staticmethod
-    def atom_count(smiles: str) -> Optional[int]:
+    def atom_count(
+        smiles: str,
+    ) -> int | None:
 
         mol = Chem.MolFromSmiles(smiles)
 
@@ -153,8 +150,8 @@ class SmilesValidator:
 
     def validate(
         self,
-        smiles: str,
-    ) -> Dict:
+        smiles: str | None,
+    ) -> dict:
         """
         Complete validation pipeline.
         """
@@ -196,3 +193,12 @@ class SmilesValidator:
             "atom_count": self.atom_count(smiles),
 
         }
+
+    # ---------------------------------------------------------
+
+    def __call__(
+        self,
+        smiles: str | None,
+    ) -> dict:
+
+        return self.validate(smiles)

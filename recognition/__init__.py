@@ -1,27 +1,22 @@
 """
-recognition package
+recognition/__init__.py
 
-Exports all public recognition components used by the DECIMER
-pipeline.
+Recognition package for the DECIMER Project.
+
+This package provides a modular recognition framework capable of
+running multiple chemical OCR engines (DECIMER, MolScribe, etc.),
+validating their outputs using RDKit, and selecting the best
+prediction through an ensemble strategy.
 """
 
-from .cleaner import ImageCleaner
-from .variants import VariantGenerator
-from .recognizer import DecimerRecognizer
-from .consensus import ConsensusEngine
-from .validator import SmilesValidator
-from .redraw import MoleculeRenderer
-from .processor import ImageProcessor
+from .recognizer import ChemicalRecognizer
+from .result import RecognitionResult
+from .exceptions import RecognitionError
 
 __all__ = [
-    "ImageCleaner",
-    "VariantGenerator",
-    "DecimerRecognizer",
-    "ConsensusEngine",
-    "SmilesValidator",
-    "MoleculeRenderer",
-    "ImageProcessor",
+    "ChemicalRecognizer",
+    "RecognitionResult",
+    "RecognitionError",
 ]
 
 __version__ = "2.0.0"
-__author__ = "Abhiram"
