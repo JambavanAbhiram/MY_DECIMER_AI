@@ -1,73 +1,138 @@
 """
 recognition/selector.py
+
+Chooses the best prediction among multiple recognition engines.
 """
 
 from __future__ import annotations
 
-from collections import Counter
-from typing import Iterable
-
-from .result import RecognitionResult
+from typing import List, Dict
 
 
 class RecognitionSelector:
-    """Select the best recognition result from multiple engines."""
+    """
+    Selects the best prediction from multiple OCR engines.
 
-    def __init__(self, min_votes: int = 2):
-        self.min_votes = min_votes
+    Input:
+        [
+            {
+                "engine": "DECIMER",
+                "success": True,
+                "smiles": "...",
+                "confidence": 0.81,
+                ...
+            },
+            {
+                "engine": "MolScribe",
+                "success": True,
+                "smiles": "...",
+                "confidence": 0.94,
+                ...
+            }
+        ]
+    """
 
-    @staticmethod
-    def _valid(results: Iterable[RecognitionResult]):
-        return [r for r in results if r.smiles]
+    def __init__(self):
+        pass
 
-    @staticmethod
-    def _confidence(result: RecognitionResult) -> float:
-        return float(result.confidence or 0.0)
+    # -------------------------------------------------------------
 
-    def majority_vote(self, results):
-        smiles = [r.smiles for r in results if r.smiles]
-        if not smiles:
-            return None, 0
+    def select(self, predictions: List[Dict]) -> Dict:
+        """
+        Select the best prediction.
 
-        votes = Counter(smiles)
-        winner, count = votes.most_common(1)[0]
-        return winner, count
+        Returns
+        -------
+        dict
+        """
 
-    def select(self, results):
-        results = self._valid(results)
+        if not predictions:
+            return self._failed("No predictions available.")
 
-        if not results:
-            return RecognitionResult(
-                engine="NONE",
-                smiles=None,
-                confidence=None,
-                metadata={
-                    "reason": "No valid predictions",
-                    "selection": "none",
-                },
+        # Keep only successful predictions
+        valid = [
+            p for p in predictions
+            if p.get("success") and p.get("smiles")
+        ]
+
+        if not valid:
+            return self._failed("No engine produced a valid prediction.")
+
+        # ---------------------------------------------------------
+        # Single successful engine
+        # ---------------------------------------------------------
+
+        if len(valid) == 1:
+
+            p = valid[0]
+
+            return {
+                "success": True,
+                "engine": p["engine"],
+                "smiles": p["smiles"],
+                "confidence": p.get("confidence"),
+                "agreement": False,
+                "votes": 1,
+            }
+
+        # ---------------------------------------------------------
+        # Multiple successful engines
+        # ---------------------------------------------------------
+
+        smiles_set = {
+            p["smiles"].strip()
+            for p in valid
+        }
+
+        # ---------------------------------------------------------
+        # Everyone agrees
+        # ---------------------------------------------------------
+
+        if len(smiles_set) == 1:
+
+            best = max(
+                valid,
+                key=lambda x: x.get("confidence") or 0
             )
 
-        winner, count = self.majority_vote(results)
+            return {
+                "success": True,
+                "engine": best["engine"],
+                "smiles": best["smiles"],
+                "confidence": best.get("confidence"),
+                "agreement": True,
+                "votes": len(valid),
+            }
 
-        if winner is not None and count >= self.min_votes:
-            candidates = [r for r in results if r.smiles == winner]
-            best = max(candidates, key=self._confidence)
-            best.metadata.update({
-                "selection": "majority_vote",
-                "votes": count,
-                "winner": winner,
-            })
-            return best
+        # ---------------------------------------------------------
+        # Engines disagree
+        # ---------------------------------------------------------
 
-        best = max(results, key=self._confidence)
+        best = max(
+            valid,
+            key=lambda x: x.get("confidence") or 0
+        )
 
-        best.metadata.update({
-            "selection": "highest_confidence",
-            "votes": 1,
-            "winner": best.smiles,
-        })
+        return {
+            "success": True,
+            "engine": best["engine"],
+            "smiles": best["smiles"],
+            "confidence": best.get("confidence"),
+            "agreement": False,
+            "votes": len(valid),
+        }
 
-        return best
+    # -------------------------------------------------------------
 
-    def __call__(self, results):
-        return self.select(results)
+    @staticmethod
+    def _failed(reason: str) -> Dict:
+
+        return {
+            "success": False,
+            "engine": None,
+            "smiles": "",
+            "confidence": None,
+            "agreement": False,
+            "votes": 0,
+            "reason": reason,
+        }

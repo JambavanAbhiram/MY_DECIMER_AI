@@ -1,96 +1,187 @@
 """
 recognition/validator.py
 
-SMILES validation utilities.
+Validates and canonicalizes predicted SMILES.
 """
 
 from __future__ import annotations
 
+from typing import Dict
+
 from rdkit import Chem
-from rdkit.Chem import Descriptors
-from rdkit.Chem import rdMolDescriptors
-from rdkit.Chem.MolStandardize import rdMolStandardize
+
+try:
+    import pubchempy as pcp
+    PUBCHEM_AVAILABLE = True
+except Exception:
+    PUBCHEM_AVAILABLE = False
 
 
 class SmilesValidator:
-    """
-    Validates and standardizes SMILES strings.
-    """
 
-    def __init__(self):
-        self.fragment_chooser = rdMolStandardize.LargestFragmentChooser()
+    def __init__(
+        self,
+        use_pubchem: bool = True,
+    ):
+        self.use_pubchem = (
+            use_pubchem and PUBCHEM_AVAILABLE
+        )
 
-    @staticmethod
-    def is_valid(smiles: str | None) -> bool:
+    # -------------------------------------------------------------
+
+    def validate(
+        self,
+        smiles: str,
+    ) -> Dict:
+
         if not smiles:
-            return False
-        try:
-            return Chem.MolFromSmiles(smiles) is not None
-        except Exception:
-            return False
 
-    def largest_fragment(self, smiles: str) -> str | None:
+            return self._failed(
+                "Empty SMILES."
+            )
+
+        # ---------------------------------------------------------
+        # RDKit
+        # ---------------------------------------------------------
+
         try:
+
             mol = Chem.MolFromSmiles(smiles)
+
             if mol is None:
-                return None
-            mol = self.fragment_chooser.choose(mol)
-            return Chem.MolToSmiles(mol, canonical=True)
-        except Exception:
-            return None
+                return self._failed(
+                    "RDKit failed."
+                )
 
-    @staticmethod
-    def canonicalize(smiles: str) -> str | None:
-        try:
-            mol = Chem.MolFromSmiles(smiles)
-            if mol is None:
-                return None
-            return Chem.MolToSmiles(mol, canonical=True)
-        except Exception:
-            return None
+            Chem.SanitizeMol(mol)
 
-    @staticmethod
-    def molecular_formula(smiles: str) -> str | None:
-        mol = Chem.MolFromSmiles(smiles)
-        return None if mol is None else rdMolDescriptors.CalcMolFormula(mol)
+            canonical = Chem.MolToSmiles(
+                mol,
+                canonical=True,
+            )
 
-    @staticmethod
-    def molecular_weight(smiles: str) -> float | None:
-        mol = Chem.MolFromSmiles(smiles)
-        return None if mol is None else round(Descriptors.MolWt(mol), 3)
+        except Exception as e:
 
-    @staticmethod
-    def heavy_atoms(smiles: str) -> int | None:
-        mol = Chem.MolFromSmiles(smiles)
-        return None if mol is None else mol.GetNumHeavyAtoms()
+            return self._failed(str(e))
 
-    @staticmethod
-    def atom_count(smiles: str) -> int | None:
-        mol = Chem.MolFromSmiles(smiles)
-        return None if mol is None else mol.GetNumAtoms()
+        # ---------------------------------------------------------
+        # PubChem
+        # ---------------------------------------------------------
 
-    def validate(self, smiles: str | None) -> dict:
-        if not self.is_valid(smiles):
-            return {
-                "valid": False,
-                "canonical_smiles": None,
-                "formula": None,
-                "molecular_weight": None,
-                "heavy_atoms": None,
-                "atom_count": None,
-            }
+        pubchem = False
 
-        smiles = self.largest_fragment(smiles)
-        smiles = self.canonicalize(smiles)
+        if self.use_pubchem:
+
+            try:
+
+                compounds = pcp.get_compounds(
+                    canonical,
+                    namespace="smiles",
+                )
+
+                pubchem = len(compounds) > 0
+
+            except Exception:
+
+                pubchem = False
+
+        # ---------------------------------------------------------
+        # Trust score
+        # ---------------------------------------------------------
+
+        trust = self._compute_trust(
+            rdkit_valid=True,
+            pubchem=pubchem,
+        )
+
+        needs_review = (
+            trust in (
+                "LOW",
+                "MEDIUM",
+            )
+        )
 
         return {
+
             "valid": True,
-            "canonical_smiles": smiles,
-            "formula": self.molecular_formula(smiles),
-            "molecular_weight": self.molecular_weight(smiles),
-            "heavy_atoms": self.heavy_atoms(smiles),
-            "atom_count": self.atom_count(smiles),
+
+            "original_smiles": smiles,
+
+            "canonical_smiles": canonical,
+
+            "pubchem": pubchem,
+
+            "trust": trust,
+
+            "needs_review": needs_review,
+
+            "reason": "",
         }
 
-    def __call__(self, smiles: str | None) -> dict:
-        return self.validate(smiles)
+    # -------------------------------------------------------------
+
+    def compare(
+        self,
+        smiles1: str,
+        smiles2: str,
+    ) -> bool:
+        """
+        Compare two SMILES after canonicalization.
+        """
+
+        r1 = self.validate(smiles1)
+        r2 = self.validate(smiles2)
+
+        if not r1["valid"]:
+            return False
+
+        if not r2["valid"]:
+            return False
+
+        return (
+            r1["canonical_smiles"]
+            ==
+            r2["canonical_smiles"]
+        )
+
+    # -------------------------------------------------------------
+
+    @staticmethod
+    def _compute_trust(
+        rdkit_valid,
+        pubchem,
+    ):
+
+        if rdkit_valid and pubchem:
+            return "HIGH"
+
+        if rdkit_valid:
+            return "MEDIUM"
+
+        return "LOW"
+
+    # -------------------------------------------------------------
+
+    @staticmethod
+    def _failed(reason):
+
+        return {
+
+            "valid": False,
+
+            "original_smiles": "",
+
+            "canonical_smiles": "",
+
+            "pubchem": False,
+
+            "trust": "LOW",
+
+            "needs_review": True,
+
+            "reason": reason,
+        }
+
+    # -------------------------------------------------------------
+
+    __call__ = validate

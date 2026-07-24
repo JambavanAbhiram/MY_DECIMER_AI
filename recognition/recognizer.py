@@ -1,399 +1,222 @@
 """
 recognition/recognizer.py
 
-High-level recognition orchestrator.
+Hybrid chemical structure recognizer.
 
 Pipeline
 --------
 Image
    │
-   ├── DECIMER Engine
-   ├── MolScribe Engine
+   ├── DECIMER
+   ├── MolScribe
    │
-Recognition Results
-   │
+   ▼
 Selector
    │
+   ▼
 Validator
    │
-RecognitionResult
+   ▼
+Final prediction
 """
 
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Dict, List
 
-from .decimer_engine import DecimerEngine
+from .decimer_engine import DECIMEREngine
 from .molscribe_engine import MolScribeEngine
 from .selector import RecognitionSelector
 from .validator import SmilesValidator
-from .result import RecognitionResult
 
 
 class ChemicalRecognizer:
     """
-    Main recognition pipeline.
-
-    Responsibilities
-    ----------------
-    1. Execute all recognition engines.
-    2. Select the best prediction.
-    3. Validate the selected SMILES.
-    4. Return a standardized RecognitionResult.
+    Hybrid recognizer combining DECIMER and MolScribe.
     """
 
     def __init__(
         self,
-        use_decimer: bool = True,
-        use_molscribe: bool = True,
-        hand_drawn: bool = False,
+        decimer_engine: DECIMEREngine | None = None,
+        molscribe_engine: MolScribeEngine | None = None,
+        selector: RecognitionSelector | None = None,
+        validator: SmilesValidator | None = None,
     ):
 
-        self.engines = []
+        self.decimer = decimer_engine or DECIMEREngine()
+        self.molscribe = molscribe_engine or MolScribeEngine()
 
-        if use_decimer:
-            self.engines.append(
-                DecimerEngine(
-                    hand_drawn=hand_drawn
-                )
-            )
+        self.selector = selector or RecognitionSelector()
+        self.validator = validator or SmilesValidator()
 
-        if use_molscribe:
-            self.engines.append(
-                MolScribeEngine()
-            )
-
-        self.selector = RecognitionSelector()
-        self.validator = SmilesValidator()
-
-    # ---------------------------------------------------------
-
-    def _run_engines(
-        self,
-        image_path: Path,
-    ):
-        """
-        Executes every recognition engine independently.
-
-        One engine crashing should never stop
-        the remaining engines.
-        """
-
-        engine_results = []
-        failed_engines = []
-
-        for engine in self.engines:
-
-            try:
-
-                result = engine.recognize(
-                    image_path
-                )
-
-                engine_results.append(result)
-
-            except Exception as exc:
-
-                failed_engines.append({
-
-                    "engine": engine.name,
-
-                    "error": str(exc),
-
-                })
-
-        return engine_results, failed_engines
-
-    # ---------------------------------------------------------
+    # -------------------------------------------------------------
 
     def recognize(
         self,
         image_path: str | Path,
-    ):
+    ) -> Dict:
 
         image_path = Path(image_path)
 
-        if not image_path.exists():
-            raise FileNotFoundError(image_path)
+        predictions: List[Dict] = []
 
-        engine_results, failed_engines = self._run_engines(
-            image_path
-        )
+        # ---------------------------------------------------------
+        # DECIMER
+        # ---------------------------------------------------------
 
-        # ---------------------------------------------
-        # Every engine failed
-        # ---------------------------------------------
+        try:
+            decimer = self.decimer.predict(image_path)
+            predictions.append(decimer)
 
-        if not engine_results:
+        except Exception as e:
 
-            return RecognitionResult(
-
-                engine="NONE",
-
-                smiles=None,
-
-                confidence=None,
-
-                metadata={
-
-                    "valid": False,
-
-                    "reason": "All recognition engines failed",
-
-                    "engine_errors": failed_engines,
-
-                },
-
+            predictions.append(
+                {
+                    "engine": "DECIMER",
+                    "success": False,
+                    "smiles": "",
+                    "confidence": None,
+                    "error": str(e),
+                }
             )
 
-        # ---------------------------------------------
+        # ---------------------------------------------------------
+        # MolScribe
+        # ---------------------------------------------------------
+
+        try:
+            molscribe = self.molscribe.predict(image_path)
+            predictions.append(molscribe)
+
+        except Exception as e:
+
+            predictions.append(
+                {
+                    "engine": "MolScribe",
+                    "success": False,
+                    "smiles": "",
+                    "confidence": None,
+                    "error": str(e),
+                }
+            )
+
+        # ---------------------------------------------------------
         # Select best prediction
-        # ---------------------------------------------
+        # ---------------------------------------------------------
 
-        selected = self.selector.select(
-            engine_results
-        )
+        best = self.selector.select(predictions)
 
-                # ---------------------------------------------
-        # Nothing recognized
-        # ---------------------------------------------
+        if not best["success"]:
 
-        if selected.smiles is None:
+            return {
 
-            selected.valid = False
+                "success": False,
 
-            selected.metadata.update({
+                "smiles": "",
 
-                "valid": False,
+                "confidence": None,
 
-                "engines": engine_results,
+                "agreement": False,
 
-                "engine_errors": failed_engines,
+                "votes": 0,
 
-            })
+                "trust": "LOW",
 
-            return selected
+                "pubchem": False,
 
-        # ---------------------------------------------
-        # Validate SMILES
-        # ---------------------------------------------
+                "needs_review": True,
+
+                "reason": best.get(
+                    "reason",
+                    "No prediction.",
+                ),
+            }
+
+        # ---------------------------------------------------------
+        # Validate selected SMILES
+        # ---------------------------------------------------------
 
         validation = self.validator.validate(
-            selected.smiles
+            best["smiles"]
         )
 
-        selected.update_validation(
-            validation
-        )
+        if not validation["valid"]:
 
-        selected.metadata.update(validation)
+            return {
 
-        selected.metadata["engines"] = engine_results
+                "success": False,
 
-        selected.metadata["engine_errors"] = (
-            failed_engines
-        )
+                "smiles": "",
 
-        # ---------------------------------------------
-        # Canonicalize if valid
-        # ---------------------------------------------
+                "confidence": best.get(
+                    "confidence"
+                ),
 
-        if selected.valid:
+                "agreement": best.get(
+                    "agreement",
+                    False,
+                ),
 
-            selected.smiles = (
-                selected.canonical_smiles
-            )
+                "votes": best.get(
+                    "votes",
+                    1,
+                ),
 
-            selected.metadata[
-                "recognition_status"
-            ] = "VALID"
+                "trust": "LOW",
 
-        else:
+                "pubchem": False,
 
-            selected.metadata[
-                "recognition_status"
-            ] = "INVALID"
+                "needs_review": True,
 
-        # ---------------------------------------------
-        # Recognition statistics
-        # ---------------------------------------------
+                "reason": validation[
+                    "reason"
+                ],
+            }
 
-        selected.metadata["total_engines"] = len(
-            self.engines
-        )
+        # ---------------------------------------------------------
+        # Final output
+        # ---------------------------------------------------------
 
-        selected.metadata[
-            "successful_engines"
-        ] = len(engine_results)
+        return {
 
-        selected.metadata[
-            "failed_engine_count"
-        ] = len(failed_engines)
+            "success": True,
 
-        selected.metadata[
-            "successful_engine_names"
-        ] = [
-            result.engine
-            for result in engine_results
-        ]
+            "engine": best["engine"],
 
-        selected.metadata[
-            "failed_engine_names"
-        ] = [
-            engine["engine"]
-            for engine in failed_engines
-        ]
+            "smiles": validation[
+                "canonical_smiles"
+            ],
 
-        return selected
+            "confidence": best.get(
+                "confidence"
+            ),
 
-    # ---------------------------------------------------------
+            "agreement": best.get(
+                "agreement",
+                False,
+            ),
 
-    def recognize_folder(
-        self,
-        folder: str | Path,
-    ):
+            "votes": best.get(
+                "votes",
+                1,
+            ),
 
-        folder = Path(folder)
+            "trust": validation[
+                "trust"
+            ],
 
-        extensions = {
-            ".png",
-            ".jpg",
-            ".jpeg",
-            ".bmp",
-            ".tif",
-            ".tiff",
+            "pubchem": validation[
+                "pubchem"
+            ],
+
+            "needs_review": validation[
+                "needs_review"
+            ],
+
+            "reason": "",
         }
 
-        results = []
+    # -------------------------------------------------------------
 
-        for image in sorted(folder.iterdir()):
-
-            if (
-                image.is_file()
-                and image.suffix.lower()
-                in extensions
-            ):
-
-                try:
-
-                    result = self.recognize(
-                        image
-                    )
-
-                    results.append(result)
-
-                except Exception as exc:
-
-                    results.append(
-
-                        RecognitionResult(
-
-                            engine="PIPELINE",
-
-                            smiles=None,
-
-                            confidence=None,
-
-                            metadata={
-
-                                "valid": False,
-
-                                "image": str(image),
-
-                                "error": str(exc),
-
-                            },
-
-                        )
-
-                    )
-
-                    return results
-
-    # ---------------------------------------------------------
-
-    def available_engines(
-        self,
-    ) -> list[str]:
-        """
-        Returns the names of all configured
-        recognition engines.
-        """
-
-        return [
-            engine.name
-            for engine in self.engines
-        ]
-
-    # ---------------------------------------------------------
-
-    def engine_count(
-        self,
-    ) -> int:
-        """
-        Returns the number of configured engines.
-        """
-
-        return len(self.engines)
-
-    # ---------------------------------------------------------
-
-    def unload_models(
-        self,
-    ) -> None:
-        """
-        Releases resources used by all
-        recognition engines.
-
-        Useful when running very large batches
-        or when explicitly freeing GPU memory.
-        """
-
-        for engine in self.engines:
-
-            try:
-
-                engine.unload()
-
-            except Exception:
-
-                pass
-
-    # ---------------------------------------------------------
-
-    def reload_models(
-        self,
-    ) -> None:
-        """
-        Reload every configured engine.
-        """
-
-        self.unload_models()
-
-        for engine in self.engines:
-
-            try:
-
-                engine.ensure_loaded()
-
-            except Exception:
-
-                pass
-
-    # ---------------------------------------------------------
-
-    def __call__(
-        self,
-        image_path: str | Path,
-    ):
-        """
-        Allows direct invocation.
-
-        Example
-        -------
-        recognizer(image_path)
-        """
-
-        return self.recognize(
-            image_path
-        )
+    __call__ = recognize

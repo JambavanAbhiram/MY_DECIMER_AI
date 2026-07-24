@@ -1,22 +1,23 @@
 """
-recognition/__init__.py
+recognition package
 
-Recognition package for the DECIMER Project.
-
-This package provides a modular recognition framework capable of
-running multiple chemical OCR engines (DECIMER, MolScribe, etc.),
-validating their outputs using RDKit, and selecting the best
-prediction through an ensemble strategy.
+Public API for the chemical recognition pipeline.
 """
 
+from .processor import RecognitionProcessor
 from .recognizer import ChemicalRecognizer
+from .decimer_engine import DECIMEREngine
+from .molscribe_engine import MolScribeEngine
+from .selector import RecognitionSelector
+from .validator import SmilesValidator
 from .result import RecognitionResult
-from .exceptions import RecognitionError
 
 __all__ = [
+    "RecognitionProcessor",
     "ChemicalRecognizer",
+    "DECIMEREngine",
+    "MolScribeEngine",
+    "RecognitionSelector",
+    "SmilesValidator",
     "RecognitionResult",
-    "RecognitionError",
 ]
-
-__version__ = "2.0.0"

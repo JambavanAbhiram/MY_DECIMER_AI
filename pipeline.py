@@ -16,7 +16,7 @@ from core.segmentation import StructureSegmenter
 from core.metadata import MetadataManager
 
 from recognition.cleaner import ImageCleaner
-from recognition.processor import ImageProcessor
+from recognition.processor import RecognitionProcessor
 
 
 class Pipeline:
@@ -25,7 +25,7 @@ class Pipeline:
         self.renderer = PDFRenderer()
         self.segmenter = StructureSegmenter()
         self.cleaner = ImageCleaner()
-        self.processor = ImageProcessor()
+        self.processor = RecognitionProcessor()
         self.metadata = MetadataManager()
 
         self.benchmark_image_counter = 1

@@ -1,166 +1,85 @@
 """
 recognition/result.py
 
-Common result object returned by every recognition engine.
+Recognition result models.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass, asdict
+from typing import Optional, Dict
 
 
-@dataclass(slots=True)
+@dataclass
 class RecognitionResult:
     """
     Standard recognition result.
-
-    This object is exchanged between recognition engines,
-    selector, validator and the main recognizer.
     """
 
-    # ---------------------------------------------------------
-    # Engine Information
-    # ---------------------------------------------------------
+    success: bool
 
-    engine: str
+    engine: Optional[str] = None
 
-    # ---------------------------------------------------------
-    # Recognition Output
-    # ---------------------------------------------------------
+    smiles: str = ""
 
-    smiles: str | None = None
+    confidence: Optional[float] = None
 
-    confidence: float | None = None
+    agreement: bool = False
 
-    # ---------------------------------------------------------
-    # Validation
-    # ---------------------------------------------------------
+    votes: int = 0
 
-    valid: bool = False
+    trust: str = "LOW"
 
-    canonical_smiles: str | None = None
+    pubchem: bool = False
 
-    formula: str | None = None
+    needs_review: bool = True
 
-    molecular_weight: float | None = None
-
-    heavy_atoms: int | None = None
-
-    atom_count: int | None = None
-
-    # ---------------------------------------------------------
-    # Metadata
-    # ---------------------------------------------------------
-
-    metadata: dict[str, Any] = field(
-        default_factory=dict
-    )
+    reason: str = ""
 
     # ---------------------------------------------------------
 
-    @property
-    def success(self) -> bool:
+    def to_dict(self) -> Dict:
         """
-        Returns True if a SMILES was recognized.
+        Convert to dictionary expected by pipeline.py.
         """
-        return self.smiles is not None
+        return asdict(self)
 
     # ---------------------------------------------------------
 
-    @property
-    def has_confidence(self) -> bool:
-        """
-        Returns True if confidence is available.
-        """
-        return self.confidence is not None
+    @classmethod
+    def failure(
+        cls,
+        reason: str,
+    ) -> "RecognitionResult":
 
-    # ---------------------------------------------------------
-
-    def update_validation(
-        self,
-        validation: dict,
-    ) -> None:
-        """
-        Update this result using validator output.
-        """
-
-        self.valid = validation.get(
-            "valid",
-            False,
-        )
-
-        self.canonical_smiles = validation.get(
-            "canonical_smiles"
-        )
-
-        self.formula = validation.get(
-            "formula"
-        )
-
-        self.molecular_weight = validation.get(
-            "molecular_weight"
-        )
-
-        self.heavy_atoms = validation.get(
-            "heavy_atoms"
-        )
-
-        self.atom_count = validation.get(
-            "atom_count"
+        return cls(
+            success=False,
+            reason=reason,
         )
 
     # ---------------------------------------------------------
 
-    def as_dict(self) -> dict:
-        """
-        Convert to a serializable dictionary.
-        """
+    @classmethod
+    def success_result(
+        cls,
+        engine: str,
+        smiles: str,
+        confidence: float | None = None,
+        agreement: bool = False,
+        votes: int = 1,
+        trust: str = "MEDIUM",
+        pubchem: bool = False,
+        needs_review: bool = False,
+    ) -> "RecognitionResult":
 
-        return {
-
-            "engine": self.engine,
-
-            "smiles": self.smiles,
-
-            "confidence": self.confidence,
-
-            "valid": self.valid,
-
-            "canonical_smiles": self.canonical_smiles,
-
-            "formula": self.formula,
-
-            "molecular_weight": self.molecular_weight,
-
-            "heavy_atoms": self.heavy_atoms,
-
-            "atom_count": self.atom_count,
-
-            "metadata": self.metadata,
-
-        }
-
-    # ---------------------------------------------------------
-
-    def __bool__(self) -> bool:
-        """
-        Allows:
-
-        if result:
-            ...
-        """
-
-        return self.success
-
-    # ---------------------------------------------------------
-
-    def __repr__(self) -> str:
-
-        return (
-            f"RecognitionResult("
-            f"engine={self.engine!r}, "
-            f"smiles={self.smiles!r}, "
-            f"confidence={self.confidence!r}, "
-            f"valid={self.valid})"
+        return cls(
+            success=True,
+            engine=engine,
+            smiles=smiles,
+            confidence=confidence,
+            agreement=agreement,
+            votes=votes,
+            trust=trust,
+            pubchem=pubchem,
+            needs_review=needs_review,
         )
