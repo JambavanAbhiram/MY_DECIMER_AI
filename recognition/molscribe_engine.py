@@ -1,20 +1,13 @@
 """
 recognition/molscribe_engine.py
-
-MolScribe recognition engine.
-
-This module wraps MolScribe and exposes a unified interface
-compatible with the recognition framework.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 import torch
 import huggingface_hub
-
 from molscribe import MolScribe
 
 from .base_engine import BaseRecognitionEngine
@@ -22,32 +15,17 @@ from .result import RecognitionResult
 
 
 class MolScribeEngine(BaseRecognitionEngine):
-    """
-    Wrapper around MolScribe.
-
-    The model is lazily loaded on the first prediction and
-    reused for all subsequent predictions.
-    """
-
     MODEL_REPO = "yujieq/MolScribe"
     MODEL_FILE = "swin_base_char_aux_1m.pth"
 
-    def __init__(
-        self,
-        device: str = "cpu",
-    ):
+    def __init__(self, device: str | None = None):
         super().__init__("MolScribe")
-
+        if device is None:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
         self.device = torch.device(device)
         self.model = None
 
-    # ---------------------------------------------------------
-
     def load(self) -> None:
-        """
-        Load the MolScribe model.
-        """
-
         if self.loaded:
             return
 
@@ -60,25 +38,20 @@ class MolScribeEngine(BaseRecognitionEngine):
             checkpoint,
             device=self.device,
         )
-
         self._loaded = True
 
-    # ---------------------------------------------------------
-
-    def recognize(
-        self,
-        image_path: Path,
-    ) -> RecognitionResult:
-
+    def recognize(self, image_path: Path) -> RecognitionResult:
         self.ensure_loaded()
 
         image_path = Path(image_path)
-
         if not image_path.exists():
             raise FileNotFoundError(image_path)
 
-        try:
+        metadata = {
+            "device": str(self.device),
+        }
 
+        try:
             prediction = self.model.predict_image_file(
                 str(image_path)
             )
@@ -86,55 +59,31 @@ class MolScribeEngine(BaseRecognitionEngine):
             smiles = prediction.get("smiles")
 
             confidence = prediction.get("confidence")
-
             if confidence is not None:
                 confidence = float(confidence)
 
+            metadata["raw_prediction"] = prediction
+
             return RecognitionResult(
-
                 engine=self.name,
-
                 smiles=smiles,
-
                 confidence=confidence,
-
-                metadata={
-                    "device": str(self.device),
-                },
-
+                metadata=metadata,
             )
 
         except Exception as exc:
+            metadata["error"] = str(exc)
 
             return RecognitionResult(
-
                 engine=self.name,
-
                 smiles=None,
-
                 confidence=None,
-
-                metadata={
-                    "error": str(exc),
-                },
-
+                metadata=metadata,
             )
 
-    # ---------------------------------------------------------
-
     def unload(self) -> None:
-        """
-        Release model resources.
-        """
-
         self.model = None
         self._loaded = False
 
-    # ---------------------------------------------------------
-
-    def __call__(
-        self,
-        image_path: Path,
-    ) -> RecognitionResult:
-
+    def __call__(self, image_path: Path) -> RecognitionResult:
         return self.recognize(image_path)

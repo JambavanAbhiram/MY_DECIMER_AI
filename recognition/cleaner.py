@@ -1,7 +1,8 @@
 """
 cleaner.py
 
-Image preprocessing module for DECIMER recognition.
+Advanced image preprocessing module for DECIMER recognition.
+Improved for chemical structure OCR.
 """
 
 from pathlib import Path
@@ -12,19 +13,23 @@ import numpy as np
 
 class ImageCleaner:
     """
-    Cleans segmented chemical structure images before
-    DECIMER recognition.
+    Advanced preprocessing pipeline for segmented
+    chemical structure images.
     """
 
     def __init__(
         self,
         resize_width: int = 1024,
         padding: int = 20,
+        clahe_clip: float = 2.5,
+        clahe_grid=(8, 8),
     ):
         self.resize_width = resize_width
         self.padding = padding
+        self.clahe_clip = clahe_clip
+        self.clahe_grid = clahe_grid
 
-    # -------------------------------------------------------------
+    # ---------------------------------------------------------
 
     def process(
         self,
@@ -33,14 +38,6 @@ class ImageCleaner:
     ):
         """
         Clean a cropped chemical structure image.
-
-        Parameters
-        ----------
-        input_path : str | Path
-            Cropped image.
-
-        output_path : str | Path
-            Destination for cleaned image.
         """
 
         input_path = Path(input_path)
@@ -67,47 +64,107 @@ class ImageCleaner:
 
         if not success:
             raise RuntimeError(
-                f"Failed to save cleaned image: {output_path}"
+                f"Failed to save image: {output_path}"
             )
 
         return output_path
 
-    # -------------------------------------------------------------
+    # ---------------------------------------------------------
 
     def _preprocess(
         self,
         image: np.ndarray,
     ) -> np.ndarray:
-        """
-        Basic preprocessing pipeline.
-        """
 
+        #
+        # STEP 1
         # Convert to grayscale
+        #
+
         gray = cv2.cvtColor(
             image,
             cv2.COLOR_BGR2GRAY,
         )
 
-        # Denoise
-        gray = cv2.GaussianBlur(
-            gray,
-            (3, 3),
-            0,
+        #
+        # STEP 2
+        # CLAHE Contrast Enhancement
+        #
+
+        clahe = cv2.createCLAHE(
+            clipLimit=self.clahe_clip,
+            tileGridSize=self.clahe_grid,
         )
 
-        # Otsu threshold
-        binary = cv2.threshold(
-            gray,
-            0,
-            255,
-            cv2.THRESH_BINARY + cv2.THRESH_OTSU,
-        )[1]
+        gray = clahe.apply(gray)
 
+        #
+        # STEP 3
+        # Edge-preserving denoising
+        #
+
+        gray = cv2.bilateralFilter(
+            gray,
+            d=5,
+            sigmaColor=50,
+            sigmaSpace=50,
+        )
+
+        #
+        # STEP 4
+        # Adaptive Threshold
+        #
+
+        binary = cv2.adaptiveThreshold(
+            gray,
+            255,
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY,
+            31,
+            7,
+        )
+
+        #
+        # STEP 5
         # Ensure black structure on white background
+        #
+
         if np.mean(binary) < 127:
             binary = cv2.bitwise_not(binary)
 
+        #
+        # STEP 6
+        # Morphological Closing
+        # Connect broken bonds
+        #
+
+        kernel = np.ones((2, 2), np.uint8)
+
+        binary = cv2.morphologyEx(
+            binary,
+            cv2.MORPH_CLOSE,
+            kernel,
+            iterations=1,
+        )
+
+        #
+        # STEP 7
+        # Morphological Opening
+        # Remove isolated noise
+        #
+
+        binary = cv2.morphologyEx(
+            binary,
+            cv2.MORPH_OPEN,
+            kernel,
+            iterations=1,
+        )
+
+        #
+        # STEP 8
         # Crop surrounding whitespace
+        #
+
         coords = cv2.findNonZero(
             255 - binary
         )
@@ -116,27 +173,60 @@ class ImageCleaner:
 
             x, y, w, h = cv2.boundingRect(coords)
 
-            binary = binary[
-                max(0, y - self.padding):
-                min(binary.shape[0], y + h + self.padding),
+            x1 = max(0, x - self.padding)
+            y1 = max(0, y - self.padding)
 
-                max(0, x - self.padding):
-                min(binary.shape[1], x + w + self.padding),
+            x2 = min(
+                binary.shape[1],
+                x + w + self.padding,
+            )
+
+            y2 = min(
+                binary.shape[0],
+                y + h + self.padding,
+            )
+
+            binary = binary[
+                y1:y2,
+                x1:x2,
             ]
 
-        # Resize if needed
+        #
+        # STEP 9
+        # Add white border
+        #
+
+        binary = cv2.copyMakeBorder(
+            binary,
+            15,
+            15,
+            15,
+            15,
+            cv2.BORDER_CONSTANT,
+            value=255,
+        )
+
+        #
+        # STEP 10
+        # Resize while preserving aspect ratio
+        #
+
         h, w = binary.shape
 
-        if w > self.resize_width:
+        max_dim = max(h, w)
 
-            scale = self.resize_width / w
+        if max_dim > self.resize_width:
+
+            scale = self.resize_width / max_dim
 
             binary = cv2.resize(
                 binary,
-                None,
-                fx=scale,
-                fy=scale,
+                (
+                    int(w * scale),
+                    int(h * scale),
+                ),
                 interpolation=cv2.INTER_AREA,
             )
 
         return binary
+

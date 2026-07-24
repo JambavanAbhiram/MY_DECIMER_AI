@@ -1,166 +1,73 @@
 """
 recognition/selector.py
-
-Selects the best recognition result from multiple OCR engines.
 """
 
 from __future__ import annotations
 
 from collections import Counter
-from typing import Iterable, List, Optional
+from typing import Iterable
 
 from .result import RecognitionResult
 
 
 class RecognitionSelector:
-    """
-    Select the best prediction from multiple recognition engines.
+    """Select the best recognition result from multiple engines."""
 
-    Selection priority
-    ------------------
-    1. Majority vote
-    2. Highest confidence
-    3. First valid prediction
-    """
-
-    def __init__(
-        self,
-        min_votes: int = 2,
-    ):
+    def __init__(self, min_votes: int = 2):
         self.min_votes = min_votes
 
-    # ---------------------------------------------------------
+    @staticmethod
+    def _valid(results: Iterable[RecognitionResult]):
+        return [r for r in results if r.smiles]
 
     @staticmethod
-    def _valid(
-        results: Iterable[RecognitionResult],
-    ) -> List[RecognitionResult]:
+    def _confidence(result: RecognitionResult) -> float:
+        return float(result.confidence or 0.0)
 
-        return [
-            result
-            for result in results
-            if result.smiles
-        ]
-
-    # ---------------------------------------------------------
-
-    @staticmethod
-    def _confidence(
-        result: RecognitionResult,
-    ) -> float:
-
-        return (
-            result.confidence
-            if result.confidence is not None
-            else 0.0
-        )
-
-    # ---------------------------------------------------------
-
-    def majority_vote(
-        self,
-        results: List[RecognitionResult],
-    ) -> Optional[str]:
-
-        smiles = [
-            result.smiles
-            for result in results
-            if result.smiles
-        ]
-
+    def majority_vote(self, results):
+        smiles = [r.smiles for r in results if r.smiles]
         if not smiles:
-            return None
+            return None, 0
 
         votes = Counter(smiles)
-
         winner, count = votes.most_common(1)[0]
+        return winner, count
 
-        if count >= self.min_votes:
-            return winner
-
-        return None
-
-    # ---------------------------------------------------------
-
-    def highest_confidence(
-        self,
-        results: List[RecognitionResult],
-    ) -> Optional[RecognitionResult]:
-
-        if not results:
-            return None
-
-        return max(
-            results,
-            key=self._confidence,
-        )
-
-    # ---------------------------------------------------------
-
-    def select(
-        self,
-        results: List[RecognitionResult],
-    ) -> RecognitionResult:
-        """
-        Select the best recognition result.
-
-        Returns
-        -------
-        RecognitionResult
-        """
-
+    def select(self, results):
         results = self._valid(results)
 
         if not results:
-
             return RecognitionResult(
                 engine="NONE",
                 smiles=None,
                 confidence=None,
                 metadata={
-                    "reason": "No valid predictions"
+                    "reason": "No valid predictions",
+                    "selection": "none",
                 },
             )
 
-        # -------------------------------------------------
-        # Majority voting
-        # -------------------------------------------------
+        winner, count = self.majority_vote(results)
 
-        winner = self.majority_vote(results)
-
-        if winner is not None:
-
-            candidates = [
-                result
-                for result in results
-                if result.smiles == winner
-            ]
-
-            best = self.highest_confidence(
-                candidates
-            )
-
-            best.metadata["selection"] = "majority_vote"
-
+        if winner is not None and count >= self.min_votes:
+            candidates = [r for r in results if r.smiles == winner]
+            best = max(candidates, key=self._confidence)
+            best.metadata.update({
+                "selection": "majority_vote",
+                "votes": count,
+                "winner": winner,
+            })
             return best
 
-        # -------------------------------------------------
-        # Highest confidence
-        # -------------------------------------------------
+        best = max(results, key=self._confidence)
 
-        best = self.highest_confidence(
-            results
-        )
-
-        best.metadata["selection"] = "highest_confidence"
+        best.metadata.update({
+            "selection": "highest_confidence",
+            "votes": 1,
+            "winner": best.smiles,
+        })
 
         return best
 
-    # ---------------------------------------------------------
-
-    def __call__(
-        self,
-        results: List[RecognitionResult],
-    ) -> RecognitionResult:
-
+    def __call__(self, results):
         return self.select(results)
